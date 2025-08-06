@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 
 // Da 'lucide-react' in dieser Umgebung nicht direkt importiert werden kann,
 // definieren wir die benötigten Icons als einfache SVG-Komponenten.
@@ -295,7 +295,7 @@ const InteractivePlayerTable = () => {
   };
 
   // Positions-Filter anwenden
-  const getFilteredByPosition = (playersList) => {
+  const getFilteredByPosition = useCallback((playersList) => {
     switch(activePositionFilter) {
       case 'QB':
         return playersList.filter(p => p.basePos === 'QB');
@@ -314,10 +314,10 @@ const InteractivePlayerTable = () => {
       default:
         return playersList;
     }
-  };
+  }, [activePositionFilter]);
 
   // Gefilterte und sortierte Daten
-  const filteredAndSortedPlayers = React.useMemo(() => {
+  const filteredAndSortedPlayers = useMemo(() => {
     let playersToFilter = getFilteredByPosition(players);
 
     if (statusFilters.available) {
@@ -341,7 +341,7 @@ const InteractivePlayerTable = () => {
 
     return playersToFilter.sort((a,b) => a.rank - b.rank);
 
-  }, [players, activePositionFilter, teamFilter, searchQuery, statusFilters]);
+  }, [players, teamFilter, searchQuery, statusFilters, getFilteredByPosition]);
 
 
   const positionButtons = ['Overall', 'QB', 'RB', 'WR', 'TE', 'FLEX', 'K', 'DST'];
@@ -570,3 +570,4 @@ const InteractivePlayerTable = () => {
 export default function App() {
     return <InteractivePlayerTable />;
 }
+ 
