@@ -266,12 +266,12 @@ const InteractivePlayerTable = () => {
         }
     };
     
-    const handleDragOverTierHeader = (e, tier, firstPlayerIndexOfTier) => {
+    const handleDragOverTierHeader = (e, dropIndex, targetTier) => {
         e.preventDefault();
         if (!draggedItem) return;
         setDragOverInfo({
-            dropIndex: firstPlayerIndexOfTier,
-            targetTier: tier
+            dropIndex: dropIndex,
+            targetTier: targetTier
         });
     };
 
@@ -287,7 +287,10 @@ const InteractivePlayerTable = () => {
             handleDragEnd();
             return;
         }
+        
         setPlayersWithHistory(prevPlayers => {
+            // ENTSCHEIDENDE KORREKTUR: Die sichtbare Liste wird hier aus dem
+            // garantiert aktuellen `prevPlayers`-State neu berechnet, um "Stale State"-Fehler zu vermeiden.
             const visiblePlayers = getFilteredByPosition(prevPlayers)
                 .filter(p => {
                     if (teamFilter && p.team !== teamFilter) return false;
@@ -302,8 +305,8 @@ const InteractivePlayerTable = () => {
             const sourceIndexInVisible = visiblePlayers.findIndex(p => p.id === draggedItem.id);
             const dropIndexInVisible = dragOverInfo.dropIndex;
 
-            if (sourceIndexInVisible === dropIndexInVisible || sourceIndexInVisible + 1 === dropIndexInVisible) {
-                return prevPlayers;
+            if (sourceIndexInVisible !== -1 && (sourceIndexInVisible === dropIndexInVisible || sourceIndexInVisible + 1 === dropIndexInVisible)) {
+                return prevPlayers; // Keine Bewegung, Aktion abbrechen.
             }
 
             const playerToMove = { ...draggedItem, tier: dragOverInfo.targetTier };
@@ -311,7 +314,7 @@ const InteractivePlayerTable = () => {
 
             let finalInsertIndex;
             if (dropIndexInVisible >= visiblePlayers.length) {
-                const lastVisiblePlayer = visiblePlayers[visiblePlayers.length - 1];
+                const lastVisiblePlayer = visiblePlayers.length > 0 ? visiblePlayers[visiblePlayers.length - 1] : null;
                 if (lastVisiblePlayer) {
                     const idx = reorderedPlayers.findIndex(p => p.id === lastVisiblePlayer.id);
                     finalInsertIndex = idx + 1;
@@ -373,7 +376,7 @@ const InteractivePlayerTable = () => {
             return true;
         });
         return playersToFilter.sort((a,b) => a.rank - b.rank);
-    }, [players, teamFilter, searchQuery, statusFilters, getFilteredByPosition]);
+    }, [players, getFilteredByPosition, teamFilter, searchQuery, statusFilters]);
 
     const positionButtons = ['Overall', 'QB', 'RB', 'WR', 'TE', 'FLEX', 'K', 'DST'];
 
@@ -452,10 +455,13 @@ const InteractivePlayerTable = () => {
                         <tbody onDragLeave={handleDragLeave}>
                             {filteredAndSortedPlayers.length > 0 ? filteredAndSortedPlayers.map((player, index) => {
                                 const showTierHeader = index === 0 || player.tier !== filteredAndSortedPlayers[index - 1].tier;
+                                const previousTierForHeader = showTierHeader && index > 0 ? filteredAndSortedPlayers[index - 1].tier : player.tier;
+                                
                                 return (
                                     <React.Fragment key={player.id}>
                                         {showTierHeader && (
-                                            <tr className="bg-blue-800/50 text-white" onDragOver={(e) => handleDragOverTierHeader(e, player.tier, index)}>
+                                            <tr className="bg-blue-800/50 text-white" 
+                                                onDragOver={(e) => handleDragOverTierHeader(e, index, previousTierForHeader)}>
                                                 <td colSpan="10" className="px-4 py-1 text-sm font-bold tracking-wider">
                                                     Tier {player.tier}
                                                 </td>
