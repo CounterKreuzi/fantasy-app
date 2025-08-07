@@ -1,61 +1,17 @@
 import React, { useState, useMemo, useCallback, useRef } from 'react';
 
-// --- SVG-Icon-Komponenten (vollständig und unverändert) ---
-const X = (props) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <path d="M18 6 6 18" /><path d="m6 6 12 12" />
-  </svg>
-);
-const Edit2 = (props) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
-  </svg>
-);
-const SearchIcon = (props) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-  </svg>
-);
-const StarIcon = (props) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
-  </svg>
-);
-const FireIcon = (props) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"></path>
-  </svg>
-);
-const SnowflakeIcon = (props) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <line x1="2" y1="12" x2="22" y2="12"></line><line x1="12" y1="2" x2="12" y2="22"></line><path d="m20 16-4-4 4-4"></path><path d="m4 8 4 4-4 4"></path><path d="m16 4-4 4-4-4"></path><path d="m8 20 4-4 4 4"></path>
-  </svg>
-);
-const CheckSquareIcon = (props) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
-  </svg>
-);
-const UploadCloudIcon = (props) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path><path d="M12 12v9"></path><path d="m16 16-4-4-4 4"></path>
-  </svg>
-);
-const DownloadIcon = (props) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line>
-  </svg>
-);
-const UndoIcon = (props) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path>
-  </svg>
-);
-const RedoIcon = (props) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <path d="M21 7v6h-6"></path><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"></path>
-  </svg>
-);
+// --- SVG-Icon-Komponenten (unverändert) ---
+const X = (props) => ( <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}> <path d="M18 6 6 18" /><path d="m6 6 12 12" /> </svg> );
+const Edit2 = (props) => ( <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}> <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" /> </svg> );
+const SearchIcon = (props) => ( <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}> <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line> </svg> );
+const StarIcon = (props) => ( <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}> <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon> </svg> );
+const FireIcon = (props) => ( <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}> <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"></path> </svg> );
+const SnowflakeIcon = (props) => ( <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}> <line x1="2" y1="12" x2="22" y2="12"></line><line x1="12" y1="2" x2="12" y2="22"></line><path d="m20 16-4-4 4-4"></path><path d="m4 8 4 4-4 4"></path><path d="m16 4-4 4-4-4"></path><path d="m8 20 4-4 4 4"></path> </svg> );
+const CheckSquareIcon = (props) => ( <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}> <polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path> </svg> );
+const UploadCloudIcon = (props) => ( <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}> <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path><path d="M12 12v9"></path><path d="m16 16-4-4-4 4"></path> </svg> );
+const DownloadIcon = (props) => ( <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}> <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line> </svg> );
+const UndoIcon = (props) => ( <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}> <path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path> </svg> );
+const RedoIcon = (props) => ( <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}> <path d="M21 7v6h-6"></path><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"></path> </svg> );
 
 // Hilfskomponente für den visuellen Indikator
 const DropIndicator = () => (
@@ -119,8 +75,9 @@ const InteractivePlayerTable = () => {
             return newPlayers;
         });
     }, [addToHistory]);
-
-    const uniqueTeams = [...new Set(players.map(p => p.team))].sort();
+    
+    // *** KORREKTUR 1: useMemo für uniqueTeams ***
+    const uniqueTeams = useMemo(() => [...new Set(players.map(p => p.team))].sort(), [players]);
 
     const calculatePositionalRanks = (playerList) => {
         const positionCounts = {};
@@ -250,112 +207,8 @@ const InteractivePlayerTable = () => {
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/plain', player.id);
     };
-
-    const handleDragOverOnPlayerRow = (e, player, indexInVisibleList) => {
-        e.preventDefault();
-        if (!draggedItem || draggedItem.id === player.id) return;
-        
-        const rect = e.currentTarget.getBoundingClientRect();
-        const y = e.clientY - rect.top;
-        const isTopHalf = y < rect.height / 2;
-        
-        // Prüfe ob dies der letzte Spieler eines Tiers ist
-        const isLastInTier = indexInVisibleList < filteredAndSortedPlayers.length - 1 && 
-                           filteredAndSortedPlayers[indexInVisibleList + 1].tier !== player.tier;
-        
-        // Prüfe ob dies der erste Spieler eines Tiers ist
-        const isFirstInTier = indexInVisibleList === 0 || 
-                            filteredAndSortedPlayers[indexInVisibleList - 1].tier !== player.tier;
-        
-        let dropIndex, targetTier;
-        
-        if (isTopHalf) {
-            // Obere Hälfte - vor diesem Spieler einfügen
-            dropIndex = indexInVisibleList;
-            targetTier = player.tier;
-        } else {
-            // Untere Hälfte
-            if (isLastInTier) {
-                // Letzter Spieler des Tiers - bleibt im selben Tier
-                dropIndex = indexInVisibleList + 1;
-                targetTier = player.tier;
-            } else {
-                // Normaler Fall - nach diesem Spieler
-                dropIndex = indexInVisibleList + 1;
-                targetTier = player.tier;
-            }
-        }
-        
-        setDragOverInfo({
-            dropIndex: dropIndex,
-            targetTier: targetTier,
-            targetPlayerId: player.id
-        });
-    };
-
-    const handleDragLeave = (e) => {
-        if (!e.currentTarget.contains(e.relatedTarget)) {
-            setDragOverInfo({ dropIndex: null, targetTier: null, targetPlayerId: null });
-        }
-    };
-
-    const handleDrop = (e) => {
-        e.preventDefault();
-        
-        if (!draggedItem || dragOverInfo.dropIndex === null) {
-            handleDragEnd();
-            return;
-        }
-        
-        // Wenn der Spieler auf sich selbst gedroppt wird, nichts tun
-        if (draggedItem.id === dragOverInfo.targetPlayerId) {
-            handleDragEnd();
-            return;
-        }
-        
-        setPlayersWithHistory(prevPlayers => {
-            const playerToMove = { ...draggedItem, tier: dragOverInfo.targetTier };
-            let tempReorderedPlayers = prevPlayers.filter(p => p.id !== draggedItem.id);
-            
-            // Berechne die tatsächliche Einfügeposition in der vollständigen Liste
-            const visiblePlayers = filteredAndSortedPlayers;
-            const dropIndexInVisible = dragOverInfo.dropIndex;
-            
-            let finalInsertIndex;
-            if (dropIndexInVisible >= visiblePlayers.length) {
-                // Am Ende der sichtbaren Liste
-                const lastVisiblePlayer = visiblePlayers[visiblePlayers.length - 1];
-                finalInsertIndex = lastVisiblePlayer 
-                    ? tempReorderedPlayers.findIndex(p => p.id === lastVisiblePlayer.id) + 1 
-                    : tempReorderedPlayers.length;
-            } else {
-                // An einer bestimmten Position in der sichtbaren Liste
-                const targetPlayerInVisibleList = visiblePlayers[dropIndexInVisible];
-                if (targetPlayerInVisibleList) {
-                    finalInsertIndex = tempReorderedPlayers.findIndex(p => p.id === targetPlayerInVisibleList.id);
-                    // Wenn der Zielplayer nicht gefunden wurde (sollte nicht passieren), am Ende einfügen
-                    if (finalInsertIndex === -1) {
-                        finalInsertIndex = tempReorderedPlayers.length;
-                    }
-                } else {
-                    finalInsertIndex = tempReorderedPlayers.length;
-                }
-            }
-            
-            tempReorderedPlayers.splice(finalInsertIndex, 0, playerToMove);
-            
-            // Ränge neu berechnen
-            const finalPlayersWithRanks = tempReorderedPlayers.map((p, i) => ({ ...p, rank: i + 1 }));
-            return calculatePositionalRanks(finalPlayersWithRanks);
-        });
-        
-        handleDragEnd();
-    };
-
-    const handleDragEnd = () => {
-        setDraggedItem(null);
-        setDragOverInfo({ dropIndex: null, targetTier: null, targetPlayerId: null });
-    };
+    
+    // *** HAUPTFEHLER: DIESE FUNKTIONEN WURDEN NACH UNTEN VERSCHOBEN ***
 
     const getFilteredByPosition = useCallback((playersList) => {
         switch(activePositionFilter) {
@@ -392,6 +245,101 @@ const InteractivePlayerTable = () => {
         return playersToFilter.sort((a,b) => a.rank - b.rank);
     }, [players, getFilteredByPosition, teamFilter, searchQuery, statusFilters]);
 
+    // *** KORREKTUR 2 & 3: Definitionen hierher verschoben und mit useCallback gewrappt ***
+    const handleDragEnd = useCallback(() => {
+        setDraggedItem(null);
+        setDragOverInfo({ dropIndex: null, targetTier: null, targetPlayerId: null });
+    }, []);
+
+    const handleDragOverOnPlayerRow = useCallback((e, player, indexInVisibleList) => {
+        e.preventDefault();
+        if (!draggedItem || draggedItem.id === player.id) return;
+        
+        const rect = e.currentTarget.getBoundingClientRect();
+        const y = e.clientY - rect.top;
+        const isTopHalf = y < rect.height / 2;
+        
+        const isLastInTier = indexInVisibleList < filteredAndSortedPlayers.length - 1 && 
+                             filteredAndSortedPlayers[indexInVisibleList + 1].tier !== player.tier;
+        
+        const isFirstInTier = indexInVisibleList === 0 || 
+                              filteredAndSortedPlayers[indexInVisibleList - 1].tier !== player.tier;
+        
+        let dropIndex, targetTier;
+        
+        if (isTopHalf) {
+            dropIndex = indexInVisibleList;
+            targetTier = player.tier;
+        } else {
+            if (isLastInTier) {
+                dropIndex = indexInVisibleList + 1;
+                targetTier = player.tier;
+            } else {
+                dropIndex = indexInVisibleList + 1;
+                targetTier = player.tier;
+            }
+        }
+        
+        setDragOverInfo({
+            dropIndex: dropIndex,
+            targetTier: targetTier,
+            targetPlayerId: player.id
+        });
+    }, [draggedItem, filteredAndSortedPlayers]); // Abhängigkeiten hinzugefügt
+
+    const handleDrop = useCallback((e) => {
+        e.preventDefault();
+        
+        if (!draggedItem || dragOverInfo.dropIndex === null) {
+            handleDragEnd();
+            return;
+        }
+        
+        if (draggedItem.id === dragOverInfo.targetPlayerId) {
+            handleDragEnd();
+            return;
+        }
+        
+        setPlayersWithHistory(prevPlayers => {
+            const playerToMove = { ...draggedItem, tier: dragOverInfo.targetTier };
+            let tempReorderedPlayers = prevPlayers.filter(p => p.id !== draggedItem.id);
+            
+            const visiblePlayers = filteredAndSortedPlayers;
+            const dropIndexInVisible = dragOverInfo.dropIndex;
+            
+            let finalInsertIndex;
+            if (dropIndexInVisible >= visiblePlayers.length) {
+                const lastVisiblePlayer = visiblePlayers[visiblePlayers.length - 1];
+                finalInsertIndex = lastVisiblePlayer 
+                    ? tempReorderedPlayers.findIndex(p => p.id === lastVisiblePlayer.id) + 1 
+                    : tempReorderedPlayers.length;
+            } else {
+                const targetPlayerInVisibleList = visiblePlayers[dropIndexInVisible];
+                if (targetPlayerInVisibleList) {
+                    finalInsertIndex = tempReorderedPlayers.findIndex(p => p.id === targetPlayerInVisibleList.id);
+                    if (finalInsertIndex === -1) {
+                        finalInsertIndex = tempReorderedPlayers.length;
+                    }
+                } else {
+                    finalInsertIndex = tempReorderedPlayers.length;
+                }
+            }
+            
+            tempReorderedPlayers.splice(finalInsertIndex, 0, playerToMove);
+            
+            const finalPlayersWithRanks = tempReorderedPlayers.map((p, i) => ({ ...p, rank: i + 1 }));
+            return calculatePositionalRanks(finalPlayersWithRanks);
+        });
+        
+        handleDragEnd();
+    }, [draggedItem, dragOverInfo, handleDragEnd, setPlayersWithHistory, filteredAndSortedPlayers]); // Abhängigkeiten hinzugefügt
+
+    const handleDragLeave = (e) => {
+        if (!e.currentTarget.contains(e.relatedTarget)) {
+            setDragOverInfo({ dropIndex: null, targetTier: null, targetPlayerId: null });
+        }
+    };
+    
     const positionButtons = ['Overall', 'QB', 'RB', 'WR', 'TE', 'FLEX', 'K', 'DST'];
 
     return (
