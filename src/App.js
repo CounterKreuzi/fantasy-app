@@ -95,8 +95,7 @@ const InteractivePlayerTable = () => {
     const undo = useCallback(() => {
         if (historyIndex > 0) {
             isPerformingHistoryAction.current = true;
-            const previousState = history[historyIndex - 1];
-            setPlayers(JSON.parse(JSON.stringify(previousState)));
+            setPlayers(JSON.parse(JSON.stringify(history[historyIndex - 1])));
             setHistoryIndex(prev => prev - 1);
             setTimeout(() => { isPerformingHistoryAction.current = false; }, 0);
         }
@@ -105,8 +104,7 @@ const InteractivePlayerTable = () => {
     const redo = useCallback(() => {
         if (historyIndex < history.length - 1) {
             isPerformingHistoryAction.current = true;
-            const nextState = history[historyIndex + 1];
-            setPlayers(JSON.parse(JSON.stringify(nextState)));
+            setPlayers(JSON.parse(JSON.stringify(history[historyIndex + 1])));
             setHistoryIndex(prev => prev + 1);
             setTimeout(() => { isPerformingHistoryAction.current = false; }, 0);
         }
@@ -309,33 +307,40 @@ const InteractivePlayerTable = () => {
         }
         
         setPlayersWithHistory(prevPlayers => {
-            const visiblePlayers = getFilteredByPosition(prevPlayers).filter(p => { if (teamFilter && p.team !== teamFilter) return false; if (searchQuery && !p.name.toLowerCase().includes(searchQuery.toLowerCase())) return false; if (statusFilters.available && p.unavailable) return false; if (statusFilters.favorite && !p.isFavorite) return false; if (statusFilters.hot && !p.isHot) return false; if (statusFilters.cold && !p.isCold) return false; return true; }).sort((a,b) => a.rank - b.rank);
-            const sourceIndexInVisible = visiblePlayers.findIndex(p => p.id === draggedItem.id);
-            const dropIndexInVisible = dragOverInfo.dropIndex;
-
-            if (sourceIndexInVisible !== -1 && (sourceIndexInVisible === dropIndexInVisible || sourceIndexInVisible + 1 === dropIndexInVisible) && dragOverInfo.position === 'standard') {
-                return prevPlayers;
-            }
-
+            // Schritt 1: Temporäre Umsortierung durchführen
             const playerToMove = { ...draggedItem, tier: dragOverInfo.targetTier };
-            let reorderedPlayers = prevPlayers.filter(p => p.id !== draggedItem.id);
+            let tempReorderedPlayers = prevPlayers.filter(p => p.id !== draggedItem.id);
+
+            const visiblePlayers = getFilteredByPosition(prevPlayers).filter(p => { if (teamFilter && p.team !== teamFilter) return false; if (searchQuery && !p.name.toLowerCase().includes(searchQuery.toLowerCase())) return false; if (statusFilters.available && p.unavailable) return false; if (statusFilters.favorite && !p.isFavorite) return false; if (statusFilters.hot && !p.isHot) return false; if (statusFilters.cold && !p.isCold) return false; return true; }).sort((a,b) => a.rank - b.rank);
+            const dropIndexInVisible = dragOverInfo.dropIndex;
 
             let finalInsertIndex;
             if (dropIndexInVisible >= visiblePlayers.length) {
                 const lastVisiblePlayer = visiblePlayers.length > 0 ? visiblePlayers[visiblePlayers.length - 1] : null;
-                finalInsertIndex = lastVisiblePlayer ? reorderedPlayers.findIndex(p => p.id === lastVisiblePlayer.id) + 1 : reorderedPlayers.length;
+                finalInsertIndex = lastVisiblePlayer ? tempReorderedPlayers.findIndex(p => p.id === lastVisiblePlayer.id) + 1 : tempReorderedPlayers.length;
             } else {
                 const targetPlayerInVisibleList = visiblePlayers[dropIndexInVisible];
-                finalInsertIndex = reorderedPlayers.findIndex(p => p.id === targetPlayerInVisibleList.id);
+                finalInsertIndex = tempReorderedPlayers.findIndex(p => p.id === targetPlayerInVisibleList.id);
             }
             
             if (finalInsertIndex === -1) {
-                finalInsertIndex = reorderedPlayers.length;
+                finalInsertIndex = tempReorderedPlayers.length;
             }
 
-            reorderedPlayers.splice(finalInsertIndex, 0, playerToMove);
+            tempReorderedPlayers.splice(finalInsertIndex, 0, playerToMove);
 
-            const finalPlayersWithRanks = reorderedPlayers.map((p, i) => ({ ...p, rank: i + 1 }));
+            // ENDGÜLTIGE KORREKTUR: Vergleiche die neue Reihenfolge der IDs mit der alten.
+            // Nur wenn sie sich unterscheidet, wird die Änderung übernommen.
+            // Dies verhindert den Bug beim Droppen an derselben Stelle.
+            const originalIds = prevPlayers.map(p => p.id).join(',');
+            const newIds = tempReorderedPlayers.map(p => p.id).join(',');
+
+            if (originalIds === newIds) {
+                return prevPlayers; // Keine Änderung, gib den alten State zurück
+            }
+
+            // Wenn es eine Änderung gab, Ränge neu berechnen und State aktualisieren.
+            const finalPlayersWithRanks = tempReorderedPlayers.map((p, i) => ({ ...p, rank: i + 1 }));
             return calculatePositionalRanks(finalPlayersWithRanks);
         });
         handleDragEnd();
