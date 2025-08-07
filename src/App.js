@@ -181,7 +181,8 @@ const InteractivePlayerTable = () => {
       return;
     }
 
-    const headers = ['Rank', 'Tier', 'Player Name', 'Team', 'Position', 'Bye Week', 'Notes', 'Unavailable', 'Favorite', 'Hot', 'Cold'];
+    // Format: Original Spalten + erweiterte Daten
+    const headers = ['RK', 'TIERS', 'PLAYER NAME', 'TEAM', 'POS', 'BYE WEEK', 'SOS SEASON', 'ECR VS. ADP', 'Notes', 'Unavailable', 'Favorite', 'Hot', 'Cold'];
     
     const csvContent = [
       headers.join(','),
@@ -190,8 +191,10 @@ const InteractivePlayerTable = () => {
         player.tier,
         `"${player.name}"`,
         player.team,
-        player.basePos,
-        player.byeWeek,
+        `"${player.basePos}${players.filter(p => p.basePos === player.basePos && p.rank <= player.rank).length}"`,
+        `"${player.byeWeek}"`,
+        '""', // SOS SEASON - leer
+        '""', // ECR VS. ADP - leer
         `"${player.notes || ''}"`,
         player.unavailable ? 'true' : 'false',
         player.isFavorite ? 'true' : 'false',
@@ -232,14 +235,18 @@ const InteractivePlayerTable = () => {
           const team = columns[3].replace(/"/g, '');
           const posRaw = columns[4].replace(/"/g, '');
           const byeWeek = parseInt(columns[5].replace(/"/g, ''), 10);
+          
+          // Extrahiere die Basis-Position (QB, RB, WR, TE, K, DST)
           const basePos = (posRaw.match(/[A-Z]+/) || [''])[0];
 
-          // Erweiterte Parsing für exportierte Dateien
-          const notes = columns[6] ? columns[6].replace(/"/g, '') : '';
-          const unavailable = columns[7] === 'true';
-          const isFavorite = columns[8] === 'true';
-          const isHot = columns[9] === 'true';
-          const isCold = columns[10] === 'true';
+          // Spalten 6 und 7 werden ignoriert (SOS SEASON, ECR VS. ADP)
+          
+          // Erweiterte Daten (falls vorhanden - bei re-importierten Dateien)
+          const notes = columns[8] ? columns[8].replace(/"/g, '') : '';
+          const unavailable = columns[9] === 'true';
+          const isFavorite = columns[10] === 'true';
+          const isHot = columns[11] === 'true';
+          const isCold = columns[12] === 'true';
 
           return {
             id: rank,
