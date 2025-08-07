@@ -59,7 +59,7 @@ const RedoIcon = (props) => (
 
 // Hilfskomponente für den visuellen Drop-Indikator
 const DropIndicator = () => (
-    <tr><td colSpan="10" className="p-0"><div className="h-1 bg-blue-500 rounded-full mx-2"></div></td></tr>
+    <tr><td colSpan="10" className="p-0"><div className="h-1.5 bg-blue-500 rounded-full mx-2 my-1"></div></td></tr>
 );
 
 
@@ -76,29 +76,29 @@ const InteractivePlayerTable = () => {
     });
     const [editingCell, setEditingCell] = useState(null);
 
-    // --- Überarbeiteter Drag & Drop State ---
+    // --- V6: STABILER, INDEX-BASIERTER DRAG & DROP STATE ---
     const [draggedItem, setDraggedItem] = useState(null);
-    const [dragOverInfo, setDragOverInfo] = useState({ dropIndex: null, targetTier: null });
+    const [dropIndex, setDropIndex] = useState(null);
 
+    // --- History und Player Management ---
     const [history, setHistory] = useState([]);
     const [historyIndex, setHistoryIndex] = useState(-1);
     const isPerformingHistoryAction = useRef(false);
 
     const addToHistory = useCallback((newPlayers) => {
         if (isPerformingHistoryAction.current) return;
-        setHistory(prev => {
-            const newHistory = prev.slice(0, historyIndex + 1);
-            newHistory.push(JSON.parse(JSON.stringify(newPlayers)));
-            return newHistory.slice(-50); // Limit history size
-        });
-        setHistoryIndex(prev => Math.min(prev + 1, 49));
-    }, [historyIndex]);
+        const newHistory = history.slice(0, historyIndex + 1);
+        newHistory.push(JSON.parse(JSON.stringify(newPlayers)));
+        setHistory(newHistory.slice(-50)); // Limit history to last 50 states
+        setHistoryIndex(newHistory.length - 1);
+    }, [history, historyIndex]);
 
     const undo = useCallback(() => {
         if (historyIndex > 0) {
             isPerformingHistoryAction.current = true;
-            setPlayers(JSON.parse(JSON.stringify(history[historyIndex - 1])));
-            setHistoryIndex(prev => prev - 1);
+            const prevIndex = historyIndex - 1;
+            setPlayers(JSON.parse(JSON.stringify(history[prevIndex])));
+            setHistoryIndex(prevIndex);
             setTimeout(() => { isPerformingHistoryAction.current = false; }, 0);
         }
     }, [history, historyIndex]);
@@ -106,8 +106,9 @@ const InteractivePlayerTable = () => {
     const redo = useCallback(() => {
         if (historyIndex < history.length - 1) {
             isPerformingHistoryAction.current = true;
-            setPlayers(JSON.parse(JSON.stringify(history[historyIndex + 1])));
-            setHistoryIndex(prev => prev + 1);
+            const nextIndex = historyIndex + 1;
+            setPlayers(JSON.parse(JSON.stringify(history[nextIndex])));
+            setHistoryIndex(nextIndex);
             setTimeout(() => { isPerformingHistoryAction.current = false; }, 0);
         }
     }, [history, historyIndex]);
@@ -116,7 +117,7 @@ const InteractivePlayerTable = () => {
         setPlayers(prev => {
             const newPlayers = typeof updateFunction === 'function' ? updateFunction(prev) : updateFunction;
             if (!isPerformingHistoryAction.current && JSON.stringify(prev) !== JSON.stringify(newPlayers)) {
-                setTimeout(() => addToHistory(newPlayers), 0);
+                addToHistory(newPlayers);
             }
             return newPlayers;
         });
@@ -127,30 +128,31 @@ const InteractivePlayerTable = () => {
     const calculatePositionalRanks = (playerList) => {
         const positionCounts = {};
         return playerList.map(player => {
-            if (!positionCounts[player.basePos]) {
-                positionCounts[player.basePos] = 0;
+            const pos = player.basePos;
+            if (!positionCounts[pos]) {
+                positionCounts[pos] = 0;
             }
-            positionCounts[player.basePos]++;
+            positionCounts[pos]++;
             return {
                 ...player,
-                pos: `${player.basePos}${positionCounts[player.basePos]}`
+                pos: `${pos}${positionCounts[pos]}`
             };
         });
     };
     
-    // --- CSV und Player Management (größtenteils unverändert) ---
+    // --- CSV und Editierfunktionen ---
     const exportToCSV = () => {
         if (players.length === 0) {
-            alert('Keine Daten zum Exportieren vorhanden.');
+            console.warn('Keine Daten zum Exportieren vorhanden.');
             return;
         }
-        const headers = ['RK', 'TIERS', 'PLAYER NAME', 'TEAM', 'POS', 'BYE WEEK', 'SOS SEASON', 'ECR VS. ADP', 'Notes', 'Unavailable', 'Favorite', 'Hot', 'Cold'];
+        const headers = ['RK', 'TIERS', 'PLAYER NAME', 'TEAM', 'POS', 'BYE WEEK', 'Notes', 'Unavailable', 'Favorite', 'Hot', 'Cold'];
         const csvContent = [
             headers.join(','),
-            ...players.map(player => [
-                player.rank, player.tier, `"${player.name}"`, player.team,
-                player.pos, player.byeWeek, '""', '""', `"${player.notes || ''}"`,
-                player.unavailable, player.isFavorite, player.isHot, player.isCold
+            ...players.map(p => [
+                p.rank, p.tier, `"${p.name}"`, p.team,
+                p.pos, p.byeWeek, `"${p.notes || ''}"`,
+                p.unavailable, p.isFavorite, p.isHot, p.isCold
             ].join(','))
         ].join('\n');
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -178,7 +180,7 @@ const InteractivePlayerTable = () => {
                     return {
                         id: rank || `player-${Date.now()}-${index}`,
                         rank: rank,
-                        tier: parseInt(columns[1]?.replace(/"/g, ''), 10) || 0,
+                        tier: parseInt(columns[1]?.replace(/"/g, ''), 10) || 1,
                         name: columns[2]?.replace(/"/g, '') || '',
                         team: columns[3]?.replace(/"/g, '') || '',
                         pos: columns[4]?.replace(/"/g, '') || '',
@@ -193,8 +195,8 @@ const InteractivePlayerTable = () => {
                 }).filter(p => p && !isNaN(p.rank));
                 const sortedPlayers = parsedPlayers.sort((a,b) => a.rank - b.rank);
                 const finalPlayers = calculatePositionalRanks(sortedPlayers.map((p, i) => ({...p, rank: i + 1})));
-                setPlayersWithHistory(finalPlayers);
-                setHistory([JSON.parse(JSON.stringify(finalPlayers))]);
+                setPlayers(finalPlayers); // Set initial state without history
+                setHistory([JSON.parse(JSON.stringify(finalPlayers))]); // Seed history
                 setHistoryIndex(0);
             };
             reader.readAsText(file);
@@ -214,15 +216,17 @@ const InteractivePlayerTable = () => {
     };
     
     const handleCellEdit = (playerId, field, value) => {
-        if (field === 'rank') {
-            const targetRank = parseInt(value);
-            if (isNaN(targetRank) || targetRank < 1) {
-                setEditingCell(null);
-                return;
-            }
-            setPlayersWithHistory(prev => {
-                const playerIndex = prev.findIndex(p => p.id === playerId);
-                if (playerIndex === -1) return prev;
+        setPlayersWithHistory(prev => {
+            const playerIndex = prev.findIndex(p => p.id === playerId);
+            if (playerIndex === -1) return prev;
+
+            if (field === 'rank') {
+                const targetRank = parseInt(value);
+                if (isNaN(targetRank) || targetRank < 1) {
+                    setEditingCell(null);
+                    return prev;
+                }
+                
                 const player = prev[playerIndex];
                 let newPlayers = [...prev];
                 newPlayers.splice(playerIndex, 1);
@@ -230,14 +234,12 @@ const InteractivePlayerTable = () => {
                 newPlayers.splice(insertIndex, 0, player);
                 const updatedRanks = newPlayers.map((p, index) => ({ ...p, rank: index + 1 }));
                 return calculatePositionalRanks(updatedRanks);
-            });
-        } else {
-             setPlayersWithHistory(prev => prev.map(p => p.id === playerId ? { ...p, [field]: value } : p));
-        }
+            }
+            return prev.map(p => p.id === playerId ? { ...p, [field]: value } : p);
+        });
         setEditingCell(null);
     };
 
-    // --- Filter Logik (unverändert) ---
     const getFilteredByPosition = useCallback((playersList) => {
         switch(activePositionFilter) {
             case 'QB': return playersList.filter(p => p.basePos === 'QB');
@@ -267,109 +269,66 @@ const InteractivePlayerTable = () => {
     }, [players, getFilteredByPosition, teamFilter, searchQuery, statusFilters]);
 
 
-    // --- KORRIGIERTE DRAG & DROP LOGIK ---
+    // --- V6: FINALE, STABILE DRAG & DROP LOGIK ---
 
     const handleDragStart = (e, player) => {
         setDraggedItem(player);
-        e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('text/plain', player.id);
     };
 
-    const handleDragOverOnPlayerRow = (e, player, indexInVisibleList) => {
+    const handleDragEnd = () => {
+        setDraggedItem(null);
+        setDropIndex(null);
+    };
+
+    const handleDragOver = (e, index) => {
         e.preventDefault();
-        if (!draggedItem) return;
-
-        const rect = e.currentTarget.getBoundingClientRect();
-        const y = e.clientY - rect.top;
-        const isTopHalf = y < rect.height / 2;
-
-        setDragOverInfo({
-            dropIndex: isTopHalf ? indexInVisibleList : indexInVisibleList + 1,
-            targetTier: player.tier,
-        });
-    };
-    
-    const handleDragOverOnTierHeader = (e, tier, indexInVisibleList) => {
-        e.preventDefault();
-        if (!draggedItem) return;
-        // Beim Hovern über eine Tier-Überschrift wollen wir den Spieler
-        // immer am Anfang dieses Tiers einfügen.
-        setDragOverInfo({
-            dropIndex: indexInVisibleList,
-            targetTier: tier,
-        });
-    };
-
-    const handleDragLeave = (e) => {
-        // Verhindert Flackern, wenn man über Kind-Elemente fährt
-        if (!e.currentTarget.contains(e.relatedTarget)) {
-            setDragOverInfo({ dropIndex: null, targetTier: null });
+        if (index !== dropIndex) {
+            setDropIndex(index);
         }
     };
 
     const handleDrop = (e) => {
         e.preventDefault();
-        if (!draggedItem || dragOverInfo.dropIndex === null) {
+        if (draggedItem === null || dropIndex === null) {
+            handleDragEnd();
+            return;
+        }
+
+        const draggedIndexInVisible = filteredAndSortedPlayers.findIndex(p => p.id === draggedItem.id);
+
+        // Verhindert Drop an derselben Stelle
+        if (draggedIndexInVisible === dropIndex || draggedIndexInVisible + 1 === dropIndex) {
             handleDragEnd();
             return;
         }
 
         setPlayersWithHistory(prevPlayers => {
-            // Schritt 1: Finde den gezogenen Spieler und entferne ihn aus der Liste.
-            const sourceIndex = prevPlayers.findIndex(p => p.id === draggedItem.id);
-            if (sourceIndex === -1) return prevPlayers; // Sollte nicht passieren
-
-            let reorderedPlayers = [...prevPlayers];
-            const playerToMove = { 
-                ...reorderedPlayers.splice(sourceIndex, 1)[0],
-                tier: dragOverInfo.targetTier
-            };
-
-            // Schritt 2: Finde den Ziel-Index in der *vollständigen* Liste.
-            // dragOverInfo.dropIndex bezieht sich auf die *sichtbare* (gefilterte) Liste.
-            const dropIndexInVisible = dragOverInfo.dropIndex;
-            let finalInsertIndex;
-
-            if (dropIndexInVisible >= filteredAndSortedPlayers.length) {
-                // Fall: Am Ende der sichtbaren Liste ablegen.
-                finalInsertIndex = reorderedPlayers.length;
-            } else {
-                // Fall: Vor einem bestimmten Spieler ablegen.
-                // Finde die ID des Zielspielers in der sichtbaren Liste.
-                const targetPlayerId = filteredAndSortedPlayers[dropIndexInVisible].id;
-                // Finde den Index dieses Spielers in unserer modifizierten, vollständigen Liste.
-                finalInsertIndex = reorderedPlayers.findIndex(p => p.id === targetPlayerId);
-            }
+            const reorderedPlayers = [...prevPlayers];
             
-            if (finalInsertIndex === -1) {
-                finalInsertIndex = reorderedPlayers.length;
+            const draggedPlayerIndexInMain = reorderedPlayers.findIndex(p => p.id === draggedItem.id);
+            if (draggedPlayerIndexInMain === -1) return prevPlayers;
+            const [playerToMove] = reorderedPlayers.splice(draggedPlayerIndexInMain, 1);
+
+            let targetIndexInMain;
+            if (dropIndex >= filteredAndSortedPlayers.length) {
+                targetIndexInMain = reorderedPlayers.length;
+            } else {
+                const targetPlayer = filteredAndSortedPlayers[dropIndex];
+                targetIndexInMain = reorderedPlayers.findIndex(p => p.id === targetPlayer.id);
             }
+             if (targetIndexInMain === -1) targetIndexInMain = reorderedPlayers.length;
 
-            // Schritt 3: Füge den Spieler an der neuen Position ein.
-            reorderedPlayers.splice(finalInsertIndex, 0, playerToMove);
+            const playerBefore = targetIndexInMain > 0 ? reorderedPlayers[targetIndexInMain - 1] : null;
+            playerToMove.tier = playerBefore ? playerBefore.tier : 1;
 
-            // Schritt 4: Sicherheitscheck - hat sich die Reihenfolge wirklich geändert?
-            // Dies behebt den Bug, bei dem Spieler beim Droppen an derselben Stelle verschwinden.
-            const originalIds = prevPlayers.map(p => p.id).join(',');
-            const newIds = reorderedPlayers.map(p => p.id).join(',');
-
-            if (originalIds === newIds && draggedItem.tier === dragOverInfo.targetTier) {
-                return prevPlayers; // Keine Änderung, alten State zurückgeben
-            }
-
-            // Schritt 5: Ränge neu berechnen und State aktualisieren.
-            const finalPlayersWithRanks = reorderedPlayers.map((p, i) => ({ ...p, rank: i + 1 }));
-            return calculatePositionalRanks(finalPlayersWithRanks);
+            reorderedPlayers.splice(targetIndexInMain, 0, playerToMove);
+            
+            const finalPlayers = reorderedPlayers.map((p, i) => ({ ...p, rank: i + 1 }));
+            return calculatePositionalRanks(finalPlayers);
         });
 
         handleDragEnd();
     };
-
-    const handleDragEnd = () => {
-        setDraggedItem(null);
-        setDragOverInfo({ dropIndex: null, targetTier: null });
-    };
-
 
     const positionButtons = ['Overall', 'QB', 'RB', 'WR', 'TE', 'FLEX', 'K', 'DST'];
 
@@ -430,7 +389,7 @@ const InteractivePlayerTable = () => {
                     </div>
                 </div>
 
-                <div className="flex-grow overflow-y-auto relative" onDrop={handleDrop} onDragOver={(e) => e.preventDefault()}>
+                <div className="flex-grow overflow-y-auto relative">
                     <table className="w-full min-w-[900px] border-separate border-spacing-0">
                         <thead className="bg-gray-800">
                             <tr className="sticky top-0 bg-gray-800 z-20 border-b-2 border-gray-600">
@@ -446,29 +405,28 @@ const InteractivePlayerTable = () => {
                                 <th className="p-3 text-center w-12 font-semibold"><SnowflakeIcon className="w-4 h-4 mx-auto" /></th>
                             </tr>
                         </thead>
-                        <tbody onDragLeave={handleDragLeave}>
+                        <tbody onDrop={handleDrop} onDragOver={(e) => e.preventDefault()}>
                             {filteredAndSortedPlayers.length > 0 ? filteredAndSortedPlayers.map((player, index) => {
                                 const showTierHeader = index === 0 || player.tier !== filteredAndSortedPlayers[index - 1].tier;
                                 
                                 return (
                                     <React.Fragment key={player.id}>
-                                        {/* Vereinfachte Drop-Indikator-Logik */}
-                                        {dragOverInfo.dropIndex === index && <DropIndicator />}
+                                        {dropIndex === index && <DropIndicator />}
 
                                         {showTierHeader && (
-                                            <tr className="bg-blue-800/50 text-white sticky top-[57px] z-10" 
-                                                onDragOver={(e) => handleDragOverOnTierHeader(e, player.tier, index)}>
+                                            <tr className="bg-blue-800/50 text-white sticky top-[57px] z-10"
+                                                onDragOver={(e) => handleDragOver(e, index)}>
                                                 <td colSpan="10" className="px-4 py-1 text-sm font-bold tracking-wider">
                                                     Tier {player.tier}
                                                 </td>
                                             </tr>
                                         )}
                                         
-                                        <tr className={`border-b border-gray-700 hover:bg-gray-700/50 transition-colors duration-150 cursor-grab active:cursor-grabbing ${draggedItem?.id === player.id ? 'opacity-30 bg-gray-700' : ''} ${player.unavailable ? 'opacity-50 bg-gray-800/60' : ''}`}
+                                        <tr className={`border-b border-gray-700 hover:bg-gray-700/50 transition-colors duration-150 cursor-grab active:cursor-grabbing ${draggedItem?.id === player.id ? 'opacity-40' : ''} ${player.unavailable ? 'opacity-50 bg-gray-800/60' : ''}`}
                                             draggable 
                                             onDragStart={(e) => handleDragStart(e, player)} 
-                                            onDragOver={(e) => handleDragOverOnPlayerRow(e, player, index)} 
-                                            onDragEnd={handleDragEnd}>
+                                            onDragEnd={handleDragEnd}
+                                            onDragOver={(e) => handleDragOver(e, index)}>
                                             
                                             <td className="p-3 text-center">
                                                 <input type="checkbox" checked={player.unavailable} onChange={() => toggleAvailability(player.id)} className="w-4 h-4 cursor-pointer bg-gray-600 border-gray-500 rounded text-blue-500 focus:ring-blue-500"/>
@@ -527,8 +485,11 @@ const InteractivePlayerTable = () => {
                                     </td>
                                 </tr>
                             )}
-                            {/* Drop-Indikator für das Ende der Liste */}
-                            {dragOverInfo.dropIndex === filteredAndSortedPlayers.length && <DropIndicator />}
+                             <tr onDragOver={(e) => handleDragOver(e, filteredAndSortedPlayers.length)}>
+                                <td colSpan={10} className="p-4"> 
+                                    {dropIndex === filteredAndSortedPlayers.length && <DropIndicator />}
+                                </td>
+                             </tr>
                         </tbody>
                     </table>
                 </div>
