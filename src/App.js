@@ -41,11 +41,10 @@ const InteractivePlayerTable = () => {
         setPlayers(currentPlayers => {
             const newPlayers = typeof newPlayersState === 'function' ? newPlayersState(currentPlayers) : newPlayersState;
             
-            // Only add to history if it's not an undo/redo action and the state has actually changed
             if (!isHistoryAction.current && JSON.stringify(newPlayers) !== JSON.stringify(currentPlayers)) {
                 const nextHistory = history.slice(0, historyIndex + 1);
                 nextHistory.push(newPlayers);
-                setHistory(nextHistory.slice(-50)); // Keep max 50 states
+                setHistory(nextHistory.slice(-50));
                 setHistoryIndex(nextHistory.length - 1);
             }
             return newPlayers;
@@ -58,7 +57,7 @@ const InteractivePlayerTable = () => {
             const prevState = history[historyIndex - 1];
             setPlayers(prevState);
             setHistoryIndex(h => h - 1);
-            setTimeout(() => { isHistoryAction.current = false; }, 0); // Reset flag after render
+            setTimeout(() => { isHistoryAction.current = false; }, 0);
         }
     }, [history, historyIndex]);
 
@@ -68,36 +67,31 @@ const InteractivePlayerTable = () => {
             const nextState = history[historyIndex + 1];
             setPlayers(nextState);
             setHistoryIndex(h => h + 1);
-            setTimeout(() => { isHistoryAction.current = false; }, 0); // Reset flag after render
+            setTimeout(() => { isHistoryAction.current = false; }, 0);
         }
     }, [history, historyIndex]);
 
 
     // --- DATA COMPUTATION & MEMOIZATION ---
-    
-    // Recalculates positional ranks (e.g., RB1, RB2) based on overall rank
     const calculatePositionalRanks = useCallback((playerList) => {
         const positionCounts = {};
-        return playerList.map(player => {
+        const sortedList = [...playerList].sort((a, b) => a.rank - b.rank);
+        return sortedList.map(player => {
             positionCounts[player.basePos] = (positionCounts[player.basePos] || 0) + 1;
             return { ...player, pos: `${player.basePos}${positionCounts[player.basePos]}` };
         });
     }, []);
 
-    // Memoize the list of unique teams to prevent recalculation on every render
     const uniqueTeams = useMemo(() => [...new Set(players.map(p => p.team))].sort(), [players]);
     
-    // The core memoized function that filters and sorts players based on UI controls
     const filteredAndSortedPlayers = useMemo(() => {
         return players
             .filter(p => {
-                // Status Filters
                 if (statusFilters.available && p.unavailable) return false;
                 if (statusFilters.favorite && !p.isFavorite) return false;
                 if (statusFilters.hot && !p.isHot) return false;
                 if (statusFilters.cold && !p.isCold) return false;
 
-                // Position Filter
                 const pos = p.basePos;
                 if (activePositionFilter !== 'Overall' && activePositionFilter !== pos) {
                     if (activePositionFilter === 'FLEX' && !['RB', 'WR', 'TE'].includes(pos)) {
@@ -106,19 +100,44 @@ const InteractivePlayerTable = () => {
                     if (activePositionFilter !== 'FLEX') return false;
                 }
 
-                // Team & Search Filter
                 if (teamFilter && p.team !== teamFilter) return false;
                 if (searchQuery && !p.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
                 
                 return true;
             })
-            .sort((a, b) => a.rank - b.rank); // Already sorted by rank, but this ensures it
+            .sort((a, b) => a.rank - b.rank);
     }, [players, statusFilters, activePositionFilter, teamFilter, searchQuery]);
 
 
     // --- EVENT HANDLERS ---
+    const exportToCSV = useCallback(() => {
+        if (players.length === 0) {
+            // In a real app, you might show a UI message instead of an alert.
+            alert('Keine Daten zum Exportieren vorhanden.');
+            return;
+        }
+        const headers = ['RK', 'TIERS', 'PLAYER NAME', 'TEAM', 'POS', 'BYE WEEK', 'SOS SEASON', 'ECR VS. ADP', 'Notes', 'Unavailable', 'Favorite', 'Hot', 'Cold'];
+        const csvContent = [
+            headers.join(','),
+            ...players.map(player => [
+                player.rank, player.tier, `"${player.name}"`, player.team,
+                player.pos, `"${player.byeWeek}"`, '""', '""', `"${player.notes || ''}"`,
+                player.unavailable ? 'true' : 'false', player.isFavorite ? 'true' : 'false',
+                player.isHot ? 'true' : 'false', player.isCold ? 'true' : 'false'
+            ].join(','))
+        ].join('\n');
+        
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', `fantasy-rankings-${new Date().toISOString().split('T')[0]}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }, [players]);
 
-    // Handles file upload and parsing of CSV data
     const handleFileUpload = useCallback((event) => {
         const file = event.target.files[0];
         if (!file) return;
@@ -126,27 +145,26 @@ const InteractivePlayerTable = () => {
         const reader = new FileReader();
         reader.onload = (e) => {
             const text = e.target.result;
-            const rows = text.split('\n').slice(1); // Skip header
+            const rows = text.split('\n').slice(1);
             const parsedPlayers = rows.map((row, index) => {
                 const columns = row.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g) || [];
                 if (columns.length < 6) return null;
 
                 const name = columns[2]?.replace(/"/g, '') || 'N/A';
                 const basePos = (columns[4]?.replace(/"/g, '').match(/[A-Z]+/) || [''])[0];
-
                 const rankVal = parseInt(columns[0]?.replace(/"/g, ''), 10);
                 const tierVal = parseInt(columns[1]?.replace(/"/g, ''), 10);
                 const byeWeekVal = parseInt(columns[5]?.replace(/"/g, ''), 10);
 
                 return {
-                    id: `${name}-${index}`, // Create a more stable unique ID
+                    id: `${name}-${index}`,
                     rank: rankVal,
-                    tier: isNaN(tierVal) ? 99 : tierVal, // Provide a fallback for tier
+                    tier: isNaN(tierVal) ? 99 : tierVal,
                     name: name,
                     team: columns[3]?.replace(/"/g, '') || 'N/A',
                     pos: columns[4]?.replace(/"/g, '') || 'N/A',
                     basePos: basePos,
-                    byeWeek: isNaN(byeWeekVal) ? '-' : byeWeekVal, // Provide a fallback for bye week
+                    byeWeek: isNaN(byeWeekVal) ? '-' : byeWeekVal,
                     notes: columns[8]?.replace(/"/g, '') || '',
                     unavailable: columns[9] === 'true',
                     isFavorite: columns[10] === 'true',
@@ -156,11 +174,9 @@ const InteractivePlayerTable = () => {
             }).filter(p => p && !isNaN(p.rank));
             
             const sortedPlayers = parsedPlayers.sort((a, b) => a.rank - b.rank);
-            // Re-assign ranks to ensure they are sequential after sorting
             const rankedPlayers = sortedPlayers.map((p, index) => ({ ...p, rank: index + 1 }));
             const finalPlayers = calculatePositionalRanks(rankedPlayers);
 
-            // Set initial state for history
             setPlayers(finalPlayers);
             setHistory([finalPlayers]);
             setHistoryIndex(0);
@@ -168,14 +184,12 @@ const InteractivePlayerTable = () => {
         reader.readAsText(file);
     }, [calculatePositionalRanks]);
     
-    // Generic handler for toggling boolean status flags on a player
     const togglePlayerStatus = useCallback((playerId, statusKey) => {
         updatePlayersAndHistory(prev => 
             prev.map(p => p.id === playerId ? { ...p, [statusKey]: !p[statusKey] } : p)
         );
     }, [updatePlayersAndHistory]);
 
-    // Handles inline editing of cells (notes, rank, etc.)
     const handleCellEdit = useCallback((playerId, field, value) => {
         if (field === 'rank') {
             const newRank = parseInt(value, 10);
@@ -189,7 +203,6 @@ const InteractivePlayerTable = () => {
                 
                 const otherPlayers = prev.filter(p => p.id !== playerId);
                 const insertIndex = Math.max(0, Math.min(newRank - 1, otherPlayers.length));
-                
                 otherPlayers.splice(insertIndex, 0, playerToMove);
                 
                 const reRanked = otherPlayers.map((p, index) => ({ ...p, rank: index + 1 }));
@@ -205,11 +218,9 @@ const InteractivePlayerTable = () => {
     }, [updatePlayersAndHistory, calculatePositionalRanks]);
 
     // --- DRAG & DROP HANDLERS ---
-    
     const handleDragStart = useCallback((e, player) => {
         setDraggedItem(player);
         e.dataTransfer.effectAllowed = 'move';
-        // Use a simple data transfer, the main state is handled by React
         e.dataTransfer.setData('text/plain', player.id);
     }, []);
 
@@ -225,30 +236,17 @@ const InteractivePlayerTable = () => {
         const rect = e.currentTarget.getBoundingClientRect();
         const y = e.clientY - rect.top;
         const isTopHalf = y < rect.height / 2;
-
         const dropIndex = isTopHalf ? indexInVisibleList : indexInVisibleList + 1;
         
         let targetTier = targetPlayer.tier;
-        let isTierChange = false;
-
-        // Determine the tier of the drop position
         if (isTopHalf) {
             const prevPlayer = filteredAndSortedPlayers[indexInVisibleList - 1];
-            // If dropping at the top of a new tier, assign the new tier
             if (prevPlayer && prevPlayer.tier !== targetPlayer.tier) {
                 targetTier = targetPlayer.tier;
-            } else {
-                targetTier = targetPlayer.tier;
             }
-        } else {
-            targetTier = targetPlayer.tier;
-        }
-
-        if (draggedItem.tier !== targetTier) {
-            isTierChange = true;
         }
         
-        setDragOverInfo({ dropIndex, targetTier, isTierChange });
+        setDragOverInfo({ dropIndex, targetTier, isTierChange: draggedItem.tier !== targetTier });
     }, [draggedItem, filteredAndSortedPlayers]);
 
     const handleDrop = useCallback(() => {
@@ -261,22 +259,16 @@ const InteractivePlayerTable = () => {
             const playerToMove = { ...draggedItem, tier: dragOverInfo.targetTier };
             const playersWithoutDragged = prevPlayers.filter(p => p.id !== draggedItem.id);
             
-            // Find the real index in the full 'players' array
             const dropTargetPlayer = filteredAndSortedPlayers[dragOverInfo.dropIndex];
             let finalInsertIndex;
 
             if (dropTargetPlayer) {
                 finalInsertIndex = playersWithoutDragged.findIndex(p => p.id === dropTargetPlayer.id);
             } else {
-                // Dropping at the very end of the filtered list
                 const lastVisiblePlayer = filteredAndSortedPlayers[filteredAndSortedPlayers.length - 1];
-                if (lastVisiblePlayer) {
-                    finalInsertIndex = playersWithoutDragged.findIndex(p => p.id === lastVisiblePlayer.id) + 1;
-                } else {
-                    finalInsertIndex = 0; // List was empty before drop
-                }
+                finalInsertIndex = lastVisiblePlayer ? playersWithoutDragged.findIndex(p => p.id === lastVisiblePlayer.id) + 1 : 0;
             }
-            if (finalInsertIndex === -1) finalInsertIndex = playersWithoutDragged.length; // Fallback
+            if (finalInsertIndex === -1) finalInsertIndex = playersWithoutDragged.length;
 
             playersWithoutDragged.splice(finalInsertIndex, 0, playerToMove);
 
@@ -300,6 +292,9 @@ const InteractivePlayerTable = () => {
                                 <UploadCloudIcon className="w-5 h-5" /> CSV importieren
                             </label>
                             <input id="csv-upload" type="file" accept=".csv" onChange={handleFileUpload} className="hidden" />
+                            <button onClick={exportToCSV} disabled={players.length === 0} className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white font-semibold rounded-md hover:bg-green-700 transition disabled:bg-gray-600 disabled:cursor-not-allowed">
+                                <DownloadIcon className="w-5 h-5" /> CSV exportieren
+                            </button>
                         </div>
                         <div className="flex items-center gap-2">
                             <button onClick={undo} disabled={historyIndex <= 0} className="p-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 transition disabled:bg-gray-700 disabled:cursor-not-allowed" title="Rückgängig machen"><UndoIcon className="w-5 h-5" /></button>
