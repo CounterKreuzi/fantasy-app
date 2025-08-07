@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 
 // --- SVG Icon Components (Unchanged) ---
 const X = (props) => (
@@ -82,18 +82,16 @@ const InteractivePlayerTable = () => {
     const [historyIndex, setHistoryIndex] = useState(-1);
     const isPerformingHistoryAction = useRef(false);
 
-    // Memoized history function
     const addToHistory = useCallback((newPlayers) => {
         if (isPerformingHistoryAction.current) return;
         const snapshot = JSON.stringify(newPlayers);
         setHistory(prev => {
             const newHistory = prev.slice(0, historyIndex + 1);
-            // Avoid adding duplicate states
             if (newHistory.length > 0 && newHistory[newHistory.length - 1] === snapshot) {
                 return prev;
             }
             newHistory.push(snapshot);
-            return newHistory.slice(-50); // Keep last 50 states
+            return newHistory.slice(-50);
         });
         setHistoryIndex(prev => Math.min(prev + 1, 49));
     }, [historyIndex]);
@@ -116,7 +114,6 @@ const InteractivePlayerTable = () => {
         }
     }, [history, historyIndex]);
 
-    // Wrapper function to update players and add to history
     const setPlayersWithHistory = useCallback((updateFunction) => {
         setPlayers(prev => {
             const newPlayers = typeof updateFunction === 'function' ? updateFunction(prev) : updateFunction;
@@ -129,10 +126,8 @@ const InteractivePlayerTable = () => {
 
     const uniqueTeams = useMemo(() => [...new Set(players.map(p => p.team))].sort(), [players]);
 
-    // Recalculates positional ranks (e.g., RB1, RB2) after sorting
     const calculatePositionalRanks = (playerList) => {
         const positionCounts = {};
-        // Ensure the list is sorted by the master rank before calculating positional ranks
         const sortedList = [...playerList].sort((a, b) => a.rank - b.rank);
         return sortedList.map(player => {
             if (!positionCounts[player.basePos]) {
@@ -182,14 +177,13 @@ const InteractivePlayerTable = () => {
                 const text = e.target.result;
                 const rows = text.split('\n').slice(1);
                 const parsedPlayers = rows.map((row, index) => {
-                    const columns = row.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g) || [];
+                    const columns = row.match(/(".*?"|[^\",]+)(?=\s*,|\s*$)/g) || [];
                     if (columns.length < 5) return null;
                     const rank = parseInt(columns[0]?.replace(/"/g, ''), 10);
                     const name = columns[2]?.replace(/"/g, '');
-                    if (!name || isNaN(rank)) return null; // Basic validation
-
+                    if (!name || isNaN(rank)) return null;
                     return {
-                        id: `${name.replace(/\s/g, '-')}-${rank}-${index}`, // DEPLOYMENT FIX: Create a more robust unique ID
+                        id: `${name.replace(/\s/g, '-')}-${rank}-${index}`,
                         rank: rank,
                         tier: parseInt(columns[1]?.replace(/"/g, ''), 10) || 1,
                         name: name,
@@ -206,11 +200,9 @@ const InteractivePlayerTable = () => {
                 }).filter(p => p !== null);
 
                 const sortedPlayers = parsedPlayers.sort((a,b) => a.rank - b.rank);
-                // Renumber ranks to be contiguous after sorting
                 const reRankedPlayers = sortedPlayers.map((p, i) => ({ ...p, rank: i + 1 }));
                 const finalPlayers = calculatePositionalRanks(reRankedPlayers);
                 setPlayersWithHistory(finalPlayers);
-                // Initialize history
                 setHistory([JSON.stringify(finalPlayers)]);
                 setHistoryIndex(0);
             };
@@ -239,12 +231,9 @@ const InteractivePlayerTable = () => {
         setPlayersWithHistory(prev => {
             const playerToMove = prev.find(p => p.id === playerId);
             if (!playerToMove) return prev;
-            
             let others = prev.filter(p => p.id !== playerId);
             const insertIndex = Math.max(0, Math.min(targetRank - 1, others.length));
-            
             others.splice(insertIndex, 0, playerToMove);
-            
             const updatedRanks = others.map((p, index) => ({ ...p, rank: index + 1 }));
             return calculatePositionalRanks(updatedRanks);
         });
@@ -266,71 +255,60 @@ const InteractivePlayerTable = () => {
         e.dataTransfer.setData('text/plain', player.id);
     };
     
-    const handleDragOverOnPlayerRow = (e, player, indexInVisibleList) => {
+    // Updated drag over logic for player rows
+    const handleDragOverOnPlayerRow = useCallback((e, player, index) => {
         e.preventDefault();
         if (!draggedItem) return;
 
         const rect = e.currentTarget.getBoundingClientRect();
         const y = e.clientY - rect.top;
         const isTopHalf = y < rect.height / 2;
-
-        const dropIndex = isTopHalf ? indexInVisibleList : indexInVisibleList + 1;
-        
-        let targetTier = player.tier;
-        if (!isTopHalf) {
-            // If dragging to the bottom half of the last player of a tier,
-            // the tier should remain the same, not the next one.
-            const nextPlayer = filteredAndSortedPlayers[indexInVisibleList + 1];
-            if (nextPlayer && nextPlayer.tier !== player.tier) {
-                 targetTier = player.tier;
-            }
-        }
+        const dropIndex = isTopHalf ? index : index + 1;
+        const targetTier = player.tier;
 
         setDragOverInfo({ dropIndex, targetTier });
-    };
+    }, [draggedItem, /* filteredAndSortedPlayers not needed here */]);
     
-    const handleDragOverOnTierHeader = (e, tier, firstPlayerIndex) => {
+    const handleDragOverOnTierHeader = useCallback((e, tier, firstPlayerIndex) => {
         e.preventDefault();
         if (!draggedItem) return;
         setDragOverInfo({
             dropIndex: firstPlayerIndex,
             targetTier: tier,
         });
-    };
-
-    const handleDragLeave = (e) => {
-        if (!e.currentTarget.contains(e.relatedTarget)) {
-            setDragOverInfo({ dropIndex: null, targetTier: null });
-        }
-    };
+    }, [draggedItem]);
 
     const handleDrop = () => {
-        if (!draggedItem || dragOverInfo.dropIndex === null || dragOverInfo.targetTier === null) {
+        if (!draggedItem || dragOverInfo.dropIndex == null) {
             handleDragEnd();
             return;
         }
 
         setPlayersWithHistory(prevPlayers => {
-            const playerToMove = { ...draggedItem, tier: dragOverInfo.targetTier };
-            let reorderedPlayers = prevPlayers.filter(p => p.id !== draggedItem.id);
-            const dropIndexInVisible = dragOverInfo.dropIndex;
-
-            let finalInsertIndex;
-            if (dropIndexInVisible >= filteredAndSortedPlayers.length) {
-                finalInsertIndex = reorderedPlayers.length;
-            } else {
-                const targetPlayerInVisibleList = filteredAndSortedPlayers[dropIndexInVisible];
-                finalInsertIndex = reorderedPlayers.findIndex(p => p.id === targetPlayerInVisibleList.id);
+            const visible = filteredAndSortedPlayers;
+            const originalIndex = visible.findIndex(p => p.id === draggedItem.id);
+            let { dropIndex, targetTier } = dragOverInfo;
+            let adjustedIndex = dropIndex;
+            if (originalIndex !== -1 && dropIndex > originalIndex) {
+                adjustedIndex -= 1;
+            }
+            // If no movement, skip
+            if (adjustedIndex === originalIndex) {
+                return prevPlayers;
             }
 
-            if (finalInsertIndex === -1) {
-                finalInsertIndex = reorderedPlayers.length;
-            }
+            const remaining = prevPlayers.filter(p => p.id !== draggedItem.id);
+            const insertId = visible[dropIndex]?.id;
+            let finalIndex = insertId
+                ? remaining.findIndex(p => p.id === insertId)
+                : remaining.length;
+            if (finalIndex === -1) finalIndex = remaining.length;
 
-            reorderedPlayers.splice(finalInsertIndex, 0, playerToMove);
+            const moved = { ...draggedItem, tier: targetTier };
+            remaining.splice(finalIndex, 0, moved);
 
-            const finalPlayersWithRanks = reorderedPlayers.map((p, i) => ({ ...p, rank: i + 1 }));
-            return calculatePositionalRanks(finalPlayersWithRanks);
+            const reRanked = remaining.map((p, i) => ({ ...p, rank: i + 1 }));
+            return calculatePositionalRanks(reRanked);
         });
         handleDragEnd();
     };
@@ -347,28 +325,15 @@ const InteractivePlayerTable = () => {
     }, [activePositionFilter]);
 
     const filteredAndSortedPlayers = useMemo(() => {
-        let playersToFilter = getFilteredByPosition(players);
-        
-        const activeStatusFilters = Object.entries(statusFilters).filter(([, isActive]) => isActive);
-        if (activeStatusFilters.length > 0) {
-            playersToFilter = playersToFilter.filter(p => {
-                return activeStatusFilters.every(([key]) => {
-                    if (key === 'available') return !p.unavailable;
-                    return p[`is${key.charAt(0).toUpperCase() + key.slice(1)}`];
-                });
-            });
+        let list = getFilteredByPosition(players);
+        const active = Object.entries(statusFilters).filter(([, v]) => v);
+        if (active.length) {
+            list = list.filter(p => active.every(([k]) => k === 'available' ? !p.unavailable : p[`is${k.charAt(0).toUpperCase() + k.slice(1)}`]));
         }
-        
-        if (teamFilter) {
-            playersToFilter = playersToFilter.filter(p => p.team === teamFilter);
-        }
-        
-        if (searchQuery) {
-            playersToFilter = playersToFilter.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
-        }
-        
-        return playersToFilter.sort((a,b) => a.rank - b.rank);
-    }, [players, getFilteredByPosition, teamFilter, searchQuery, statusFilters]);
+        if (teamFilter) list = list.filter(p => p.team === teamFilter);
+        if (searchQuery) list = list.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
+        return list.sort((a,b) => a.rank - b.rank);
+    }, [players, getFilteredByPosition, statusFilters, teamFilter, searchQuery]);
 
     const positionButtons = ['Overall', 'QB', 'RB', 'WR', 'TE', 'FLEX', 'K', 'DST'];
 
@@ -377,7 +342,6 @@ const InteractivePlayerTable = () => {
             <div className="bg-gray-800 rounded-lg shadow-2xl flex flex-col h-[calc(100vh-2rem)]">
                 {/* Header and Controls */}
                 <div className="flex-shrink-0">
-                    {/* Top Bar: Import/Export/History */}
                     <div className="p-4 bg-gray-700/50 border-b border-gray-700 flex flex-wrap items-center justify-between gap-4">
                         <div className="flex flex-wrap items-center gap-4">
                             <label htmlFor="csv-upload" className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 transition">
@@ -397,7 +361,6 @@ const InteractivePlayerTable = () => {
                             </button>
                         </div>
                     </div>
-                    {/* Filter Bar */}
                     <div className="p-3 border-b border-gray-700 flex flex-wrap items-center justify-between gap-y-4">
                         <div className="flex flex-wrap items-center gap-x-6 gap-y-4">
                             <button onClick={() => handleStatusFilterToggle('available')} title="Nur verfügbare Spieler anzeigen" className={`p-2 rounded-md transition-colors ${statusFilters.available ? 'bg-green-600 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}>
@@ -419,7 +382,7 @@ const InteractivePlayerTable = () => {
                             </div>
                             <div className="relative flex items-center">
                                 <SearchIcon className="w-4 h-4 text-gray-400 absolute left-3 pointer-events-none" />
-                                <input id="search-filter" type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Suchen..." className="w-40 bg-gray-700 border border-gray-600 rounded-md py-1.5 pl-9 pr-8 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+                                <input htmlFor="search-filter" type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Suchen..." className="w-40 bg-gray-700 border border-gray-600 rounded-md py-1.5 pl-9 pr-8 text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
                                 {searchQuery && (<button onClick={() => setSearchQuery('')} className="absolute right-2 text-gray-400 hover:text-white" aria-label="Suche zurücksetzen"><X className="w-4 h-4" /></button>)}
                             </div>
                         </div>
@@ -448,85 +411,64 @@ const InteractivePlayerTable = () => {
                                 <th className="p-3 text-center w-12 font-semibold"><SnowflakeIcon className="w-4 h-4 mx-auto" /></th>
                             </tr>
                         </thead>
-                        <tbody onDragLeave={handleDragLeave}>
+                        <tbody onDragLeave={(e) => {
+                            if (!e.currentTarget.contains(e.relatedTarget)) setDragOverInfo({ dropIndex: null, targetTier: null });
+                        }}>
                             {filteredAndSortedPlayers.length > 0 ? filteredAndSortedPlayers.map((player, index) => {
                                 const showTierHeader = index === 0 || player.tier !== filteredAndSortedPlayers[index - 1].tier;
-                                
                                 return (
                                     <React.Fragment key={player.id}>
                                         {dragOverInfo.dropIndex === index && <DropIndicator />}
-
                                         {showTierHeader && (
-                                            <tr className="bg-blue-800/50 text-white sticky top-[53px] z-10">
-                                                <td colSpan="11" className="px-4 py-1 text-sm font-bold tracking-wider"
-                                                    onDragOver={(e) => handleDragOverOnTierHeader(e, player.tier, index)}>
+                                            <tr className="bg-blue-800/50 text-white sticky top-[53px] z-10" onDragOver={(e) => handleDragOverOnTierHeader(e, player.tier, index)}>
+                                                <td colSpan="11" className="px-4 py-1 text-sm font-bold tracking-wider">
                                                     Tier {player.tier}
                                                 </td>
                                             </tr>
                                         )}
-                                        
-                                        <tr className={`border-b border-gray-700 hover:bg-gray-700/50 transition-colors duration-150 cursor-grab active:cursor-grabbing ${draggedItem?.id === player.id ? 'opacity-30' : ''} ${player.unavailable ? 'opacity-50 bg-gray-800/60' : ''}`}
-                                            draggable 
-                                            onDragStart={(e) => handleDragStart(e, player)} 
-                                            onDragOver={(e) => handleDragOverOnPlayerRow(e, player, index)} 
-                                            onDragEnd={handleDragEnd}>
-                                            
+                                        <tr draggable
+                                            onDragStart={(e) => handleDragStart(e, player)}
+                                            onDragOver={(e) => handleDragOverOnPlayerRow(e, player, index)}
+                                            onDragEnd={handleDragEnd}
+                                            className={`border-b border-gray-700 hover:bg-gray-700/50 transition-colors duration-150 cursor-grab active:cursor-grabbing ${draggedItem?.id === player.id ? 'opacity-30' : ''} ${player.unavailable ? 'opacity-50 bg-gray-800/60' : ''}`}
+                                        >
                                             <td className="p-3 text-center">
-                                                <input type="checkbox" checked={player.unavailable} onChange={() => toggleAvailability(player.id)} className="w-4 h-4 cursor-pointer bg-gray-600 border-gray-500 rounded text-blue-500 focus:ring-blue-500"/>
+                                                <input type="checkbox" checked={player.unavailable} onChange={() => toggleAvailability(player.id)} className="w-4 h-4 cursor-pointer bg-gray-600 border-gray-500 rounded text-blue-500 focus:ring-blue-500" />
                                             </td>
-                                            <td className={`p-3 text-center ${player.unavailable ? 'line-through text-gray-500' : ''}`}>
+                                            <td className={`p-3 text-center ${player.unavailable ? 'line-through text-gray-500' : ''}`}>{" + `
                                                 {editingCell === `${player.id}-rank` ? (
-                                                <input type="number" defaultValue={player.rank} onBlur={(e) => handleCellEdit(player.id, 'rank', e.target.value)} onKeyPress={(e) => e.key === 'Enter' && e.target.blur()} className="px-2 py-1 border border-gray-600 rounded bg-gray-900 w-16 text-center" autoFocus/>
+                                                    <input type="number" defaultValue={player.rank} onBlur={(e) => handleCellEdit(player.id, 'rank', e.target.value)} onKeyPress={(e) => e.key === 'Enter' && e.target.blur()} className="px-2 py-1 border border-gray-600 rounded bg-gray-900 w-16 text-center" autoFocus/>
                                                 ) : (
-                                                <span className="cursor-pointer hover:bg-gray-600/50 px-2 py-1 rounded inline-flex items-center gap-1 group" onClick={() => setEditingCell(`${player.id}-rank`)}>
-                                                    {player.rank}
-                                                    <Edit2 className="w-3 h-3 text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                                </span>
+                                                    <span onClick={() => setEditingCell(`${player.id}-rank`)} className="cursor-pointer hover:bg-gray-600/50 px-2 py-1 rounded inline-flex items-center gap-1 group">
+                                                        {player.rank}<Edit2 className="w-3 h-3 text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                    </span>
                                                 )}
                                             </td>
-                                            <td className={`p-3 group ${player.unavailable ? 'line-through text-gray-500' : ''}`}>
-                                                <span className="font-medium text-gray-100">{player.name}</span>
-                                            </td>
-                                            <td className={`p-3 ${player.unavailable ? 'line-through text-gray-500' : ''}`}>
-                                                <span className="font-semibold text-gray-400">{player.team}</span>
-                                            </td>
+                                            <td className={`p-3 group ${player.unavailable ? 'line-through text-gray-500' : ''}`}>{player.name}</td>
+                                            <td className={`p-3 ${player.unavailable ? 'line-through text-gray-500' : ''}`}>{player.team}</td>
                                             <td className={`p-3 ${player.unavailable ? 'line-through text-gray-500' : 'text-gray-300'}`}>{player.pos}</td>
-                                            <td className={`p-3 text-center ${player.unavailable ? 'line-through text-gray-500' : ''}`}>
-                                                <span className="font-medium">{player.byeWeek}</span>
-                                            </td>
+                                            <td className={`p-3 text-center ${player.unavailable ? 'line-through text-gray-500' : ''}`}>{player.byeWeek}</td>
                                             <td className="p-3">
                                                 {editingCell === `${player.id}-notes` ? (
-                                                <input type="text" defaultValue={player.notes} onBlur={(e) => handleCellEdit(player.id, 'notes', e.target.value)} onKeyPress={(e) => e.key === 'Enter' && e.target.blur()} className="px-2 py-1 border border-gray-600 rounded bg-gray-900 w-full" placeholder="Notiz hinzufügen..." autoFocus/>
+                                                    <input type="text" defaultValue={player.notes} onBlur={(e) => handleCellEdit(player.id, 'notes', e.target.value)} onKeyPress={(e) => e.key === 'Enter' && e.target.blur()} className="px-2 py-1 border border-gray-600 rounded bg-gray-900 w-full" autoFocus />
                                                 ) : (
-                                                <span className={`cursor-pointer hover:bg-gray-600/50 px-2 py-1 rounded block min-h-[28px] w-full ${player.notes ? 'text-gray-300' : 'text-gray-500'}`} onClick={() => setEditingCell(`${player.id}-notes`)}>
-                                                    {player.notes || '+ Notiz'}
-                                                </span>
+                                                    <span onClick={() => setEditingCell(`${player.id}-notes`)} className={`cursor-pointer hover:bg-gray-600/50 px-2 py-1 rounded block min-h-[28px] w-full ${player.notes ? 'text-gray-300' : 'text-gray-500'}`}>{player.notes || '+ Notiz'}</span>
                                                 )}
                                             </td>
                                             <td className="p-3 text-center">
-                                                <button onClick={() => togglePlayerStatus(player.id, 'isFavorite')} className={`p-1 rounded-full transition-colors ${player.isFavorite ? 'text-yellow-400' : 'text-gray-600 hover:text-yellow-400'}`}>
-                                                    <StarIcon className="w-5 h-5" fill={player.isFavorite ? 'currentColor' : 'none'} />
-                                                </button>
+                                                <button onClick={() => togglePlayerStatus(player.id, 'isFavorite')} className={`p-1 rounded-full transition-colors ${player.isFavorite ? 'text-yellow-400' : 'text-gray-600 hover:text-yellow-400'}`}><StarIcon className="w-5 h-5" fill={player.isFavorite ? 'currentColor' : 'none'} /></button>
                                             </td>
                                             <td className="p-3 text-center">
-                                                <button onClick={() => togglePlayerStatus(player.id, 'isHot')} className={`p-1 rounded-full transition-colors ${player.isHot ? 'text-red-500' : 'text-gray-600 hover:text-red-500'}`}>
-                                                    <FireIcon className="w-5 h-5" />
-                                                </button>
+                                                <button onClick={() => togglePlayerStatus(player.id, 'isHot')} className={`p-1 rounded-full transition-colors ${player.isHot ? 'text-red-500' : 'text-gray-600 hover:text-red-500'}`}><FireIcon className="w-5 h-5" /></button>
                                             </td>
                                             <td className="p-3 text-center">
-                                                <button onClick={() => togglePlayerStatus(player.id, 'isCold')} className={`p-1 rounded-full transition-colors ${player.isCold ? 'text-blue-400' : 'text-gray-600 hover:text-blue-400'}`}>
-                                                    <SnowflakeIcon className="w-5 h-5" />
-                                                </button>
+                                                <button onClick={() => togglePlayerStatus(player.id, 'isCold')} className={`p-1 rounded-full transition-colors ${player.isCold ? 'text-blue-400' : 'text-gray-600 hover:text-blue-400'}`}><SnowflakeIcon className="w-5 h-5" /></button>
                                             </td>
                                         </tr>
                                     </React.Fragment>
                                 );
                             }) : (
-                                <tr>
-                                    <td colSpan="11" className="text-center p-8 text-gray-500">
-                                        Keine Spielerdaten. Bitte laden Sie eine CSV-Datei hoch.
-                                    </td>
-                                </tr>
+                                <tr><td colSpan="11" className="text-center p-8 text-gray-500">Keine Spielerdaten. Bitte laden Sie eine CSV-Datei hoch.</td></tr>
                             )}
                             {filteredAndSortedPlayers.length > 0 && dragOverInfo.dropIndex === filteredAndSortedPlayers.length && <DropIndicator />}
                         </tbody>
