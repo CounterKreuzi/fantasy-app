@@ -280,15 +280,10 @@ const InteractivePlayerTable = () => {
         setDropInfo({ index: null, above: false });
     };
 
-    const handleDragOver = (e, index, isTierHeader = false) => {
+    const handleDragOver = (e, index) => {
         e.preventDefault();
         const rect = e.currentTarget.getBoundingClientRect();
         const isAbove = e.clientY < rect.top + rect.height / 2;
-
-        if (index === 0 && isTierHeader && isAbove) {
-            setDropInfo({ index: 0, above: false });
-            return;
-        }
 
         if (dropInfo.index !== index || dropInfo.above !== isAbove) {
             setDropInfo({ index, above: isAbove });
@@ -301,54 +296,59 @@ const InteractivePlayerTable = () => {
             handleDragEnd();
             return;
         }
-
+    
         const { index: dropVisIndex, above } = dropInfo;
-        
+    
         setPlayersWithHistory(prevPlayers => {
-            const targetPlayer = filteredAndSortedPlayers[dropVisIndex];
-            const isTargetTierHeader = dropVisIndex === 0 || (targetPlayer && filteredAndSortedPlayers[dropVisIndex - 1]?.tier !== targetPlayer.tier);
-
             const reorderedPlayers = [...prevPlayers];
+    
             const draggedPlayerIndexInMain = reorderedPlayers.findIndex(p => p.id === draggedItem.id);
             if (draggedPlayerIndexInMain === -1) return prevPlayers;
-
-            // --- KORREKTUR VOM 01.08.2024 ---
-            // Zuerst den Ziel-Index in der *unveränderten* Liste finden.
-            let targetIndexInMain;
+    
+            // KORREKTUR: Bestimme den Einfügepunkt basierend auf der visuellen Position (`above` Flag).
+            let insertionIndexInMain;
+    
             if (dropVisIndex >= filteredAndSortedPlayers.length) {
-                targetIndexInMain = reorderedPlayers.length;
+                // Ablegen am Ende der sichtbaren Liste.
+                const lastVisiblePlayer = filteredAndSortedPlayers[filteredAndSortedPlayers.length - 1];
+                if (lastVisiblePlayer) {
+                    const idx = reorderedPlayers.findIndex(p => p.id === lastVisiblePlayer.id);
+                    insertionIndexInMain = idx + 1;
+                } else {
+                    insertionIndexInMain = 0; // In leere gefilterte Liste ablegen
+                }
             } else {
+                // Ablegen relativ zu einem bestimmten sichtbaren Element.
                 const targetInVisible = filteredAndSortedPlayers[dropVisIndex];
-                targetIndexInMain = reorderedPlayers.findIndex(p => p.id === targetInVisible.id);
+                insertionIndexInMain = reorderedPlayers.findIndex(p => p.id === targetInVisible.id);
+                if (!above) {
+                    // Wenn unterhalb der Zeile abgelegt wird, ist der Einfügepunkt danach.
+                    insertionIndexInMain++;
+                }
             }
-            if (targetIndexInMain === -1) targetIndexInMain = reorderedPlayers.length;
-            
-            // Jetzt den Spieler entfernen.
+    
+            if (insertionIndexInMain === -1) return prevPlayers; // Sollte nicht passieren
+    
+            // Entferne den gezogenen Spieler
             const [playerToMove] = reorderedPlayers.splice(draggedPlayerIndexInMain, 1);
-
-            // Den Ziel-Index anpassen, falls das Entfernen die Position des Ziels verschoben hat.
-            // Das passiert nur, wenn man ein Element nach "unten" verschiebt (von einem kleineren zu einem größeren Index).
-            if (draggedPlayerIndexInMain < targetIndexInMain) {
-                targetIndexInMain--;
+    
+            // Passe den Einfüge-Index an, falls er durch das Entfernen beeinflusst wurde.
+            if (draggedPlayerIndexInMain < insertionIndexInMain) {
+                insertionIndexInMain--;
             }
-            // --- ENDE DER KORREKTUR ---
-
-            const playerBefore = targetIndexInMain > 0 ? reorderedPlayers[targetIndexInMain - 1] : null;
-            
-            // Tier-Zuweisungslogik (unverändert)
-            if (isTargetTierHeader && !above) {
-                playerToMove.tier = targetPlayer.tier;
-            } else {
-                playerToMove.tier = playerBefore ? playerBefore.tier : 1;
-            }
-
-            // Spieler an der korrekten, angepassten Position einfügen.
-            reorderedPlayers.splice(targetIndexInMain, 0, playerToMove);
-            
+    
+            // Tier-Zuweisung: Das Tier wird vom Spieler davor übernommen.
+            const playerBefore = insertionIndexInMain > 0 ? reorderedPlayers[insertionIndexInMain - 1] : null;
+            playerToMove.tier = playerBefore ? playerBefore.tier : 1;
+    
+            // Füge den Spieler an der neuen Position ein.
+            reorderedPlayers.splice(insertionIndexInMain, 0, playerToMove);
+    
+            // Berechne Ränge neu und aktualisiere den State.
             const finalPlayers = reorderedPlayers.map((p, i) => ({ ...p, rank: i + 1 }));
             return calculatePositionalRanks(finalPlayers);
         });
-
+    
         handleDragEnd();
     };
 
@@ -356,9 +356,9 @@ const InteractivePlayerTable = () => {
 
     return (
         <div className="max-w-7xl mx-auto p-2 sm:p-4 bg-gray-900 text-gray-200 min-h-screen font-sans">
-            {/* --- Header und Filter (unverändert) --- */}
             <div className="bg-gray-800 rounded-lg shadow-2xl flex flex-col h-[calc(100vh-2rem)]">
                 <div className="flex-shrink-0">
+                    {/* Header und Filter (unverändert) */}
                     <div className="p-4 bg-gray-700/50 border-b border-gray-700 flex flex-wrap items-center justify-between gap-4">
                         <div className="flex flex-wrap items-center gap-4">
                             <label htmlFor="csv-upload" className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 transition">
@@ -435,9 +435,9 @@ const InteractivePlayerTable = () => {
                                     <React.Fragment key={player.id}>
                                         {showTierHeader && (
                                             <>
-                                            {dropInfo.index === index && dropInfo.above && <DropIndicator />}
+                                            {index !== 0 && dropInfo.index === index && dropInfo.above && <DropIndicator />}
                                             <tr className="bg-blue-800/50 text-white"
-                                                onDragOver={(e) => handleDragOver(e, index, true)}>
+                                                onDragOver={(e) => handleDragOver(e, index)}>
                                                 <td colSpan="10" className="px-4 py-1 text-sm font-bold tracking-wider">
                                                     Tier {player.tier}
                                                 </td>
@@ -452,7 +452,7 @@ const InteractivePlayerTable = () => {
                                             draggable 
                                             onDragStart={(e) => handleDragStart(e, player)} 
                                             onDragEnd={handleDragEnd}
-                                            onDragOver={(e) => handleDragOver(e, index, false)}>
+                                            onDragOver={(e) => handleDragOver(e, index)}>
                                             
                                             <td className="p-3 text-center">
                                                 <input type="checkbox" checked={player.unavailable} onChange={() => toggleAvailability(player.id)} className="w-4 h-4 cursor-pointer bg-gray-600 border-gray-500 rounded text-blue-500 focus:ring-blue-500"/>
