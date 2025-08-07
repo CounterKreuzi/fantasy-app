@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef } from 'react';
 
 // Da 'lucide-react' in dieser Umgebung nicht direkt importiert werden kann,
 // definieren wir die benötigten Icons als einfache SVG-Komponenten.
@@ -61,6 +61,28 @@ const UploadCloudIcon = (props) => (
     </svg>
 );
 
+const DownloadIcon = (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+        <polyline points="7 10 12 15 17 10"></polyline>
+        <line x1="12" y1="15" x2="12" y2="3"></line>
+    </svg>
+);
+
+const UndoIcon = (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+        <path d="M3 7v6h6"></path>
+        <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path>
+    </svg>
+);
+
+const RedoIcon = (props) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+        <path d="M21 7v6h-6"></path>
+        <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"></path>
+    </svg>
+);
+
 const InteractivePlayerTable = () => {
   const [players, setPlayers] = useState([]);
   const [activePositionFilter, setActivePositionFilter] = useState('Overall');
@@ -75,6 +97,62 @@ const InteractivePlayerTable = () => {
   const [editingCell, setEditingCell] = useState(null);
   const [draggedItem, setDraggedItem] = useState(null);
   const [dragOverIndex, setDragOverIndex] = useState(null);
+
+  // Undo/Redo State
+  const [history, setHistory] = useState([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  const isPerformingHistoryAction = useRef(false);
+
+  // Funktion zum Hinzufügen eines neuen Zustands zur History
+  const addToHistory = useCallback((newPlayers) => {
+    if (isPerformingHistoryAction.current) return;
+    
+    setHistory(prev => {
+      const newHistory = prev.slice(0, historyIndex + 1);
+      newHistory.push(JSON.parse(JSON.stringify(newPlayers)));
+      // Begrenzen der History auf 50 Einträge für Performance
+      return newHistory.slice(-50);
+    });
+    setHistoryIndex(prev => Math.min(prev + 1, 49));
+  }, [historyIndex]);
+
+  // Undo-Funktion
+  const undo = useCallback(() => {
+    if (historyIndex > 0) {
+      isPerformingHistoryAction.current = true;
+      const previousState = history[historyIndex - 1];
+      setPlayers(JSON.parse(JSON.stringify(previousState)));
+      setHistoryIndex(prev => prev - 1);
+      setTimeout(() => {
+        isPerformingHistoryAction.current = false;
+      }, 0);
+    }
+  }, [history, historyIndex]);
+
+  // Redo-Funktion
+  const redo = useCallback(() => {
+    if (historyIndex < history.length - 1) {
+      isPerformingHistoryAction.current = true;
+      const nextState = history[historyIndex + 1];
+      setPlayers(JSON.parse(JSON.stringify(nextState)));
+      setHistoryIndex(prev => prev + 1);
+      setTimeout(() => {
+        isPerformingHistoryAction.current = false;
+      }, 0);
+    }
+  }, [history, historyIndex]);
+
+  // Wrapper-Funktion für setPlayers mit History-Tracking
+  const setPlayersWithHistory = useCallback((updateFunction) => {
+    setPlayers(prev => {
+      const newPlayers = typeof updateFunction === 'function' ? updateFunction(prev) : updateFunction;
+      if (!isPerformingHistoryAction.current && JSON.stringify(prev) !== JSON.stringify(newPlayers)) {
+        // Verzögertes Hinzufügen zur History um Race Conditions zu vermeiden
+        setTimeout(() => addToHistory(newPlayers), 0);
+      }
+      return newPlayers;
+    });
+  }, [addToHistory]);
 
   // Extrahiere alle einzigartigen Teams für den Dropdown
   const uniqueTeams = [...new Set(players.map(p => p.team))].sort();
@@ -94,6 +172,46 @@ const InteractivePlayerTable = () => {
         pos: `${player.basePos}${positionCounts[player.basePos]}`
       };
     });
+  };
+
+  // CSV-Export-Funktion
+  const exportToCSV = () => {
+    if (players.length === 0) {
+      alert('Keine Daten zum Exportieren vorhanden.');
+      return;
+    }
+
+    const headers = ['Rank', 'Tier', 'Player Name', 'Team', 'Position', 'Bye Week', 'Notes', 'Unavailable', 'Favorite', 'Hot', 'Cold'];
+    
+    const csvContent = [
+      headers.join(','),
+      ...players.map(player => [
+        player.rank,
+        player.tier,
+        `"${player.name}"`,
+        player.team,
+        player.basePos,
+        player.byeWeek,
+        `"${player.notes || ''}"`,
+        player.unavailable ? 'true' : 'false',
+        player.isFavorite ? 'true' : 'false',
+        player.isHot ? 'true' : 'false',
+        player.isCold ? 'true' : 'false'
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `fantasy-rankings-${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
   };
 
   // CSV-Parser und Ladefunktion
@@ -116,6 +234,13 @@ const InteractivePlayerTable = () => {
           const byeWeek = parseInt(columns[5].replace(/"/g, ''), 10);
           const basePos = (posRaw.match(/[A-Z]+/) || [''])[0];
 
+          // Erweiterte Parsing für exportierte Dateien
+          const notes = columns[6] ? columns[6].replace(/"/g, '') : '';
+          const unavailable = columns[7] === 'true';
+          const isFavorite = columns[8] === 'true';
+          const isHot = columns[9] === 'true';
+          const isCold = columns[10] === 'true';
+
           return {
             id: rank,
             rank,
@@ -125,16 +250,21 @@ const InteractivePlayerTable = () => {
             pos: posRaw, // Temporär speichern
             basePos,
             byeWeek,
-            unavailable: false,
-            notes: '',
-            isFavorite: false,
-            isHot: false,
-            isCold: false,
+            unavailable: unavailable || false,
+            notes: notes || '',
+            isFavorite: isFavorite || false,
+            isHot: isHot || false,
+            isCold: isCold || false,
           };
         }).filter(p => p && !isNaN(p.rank)); 
 
         const sortedPlayers = parsedPlayers.sort((a,b) => a.rank - b.rank);
-        setPlayers(calculatePositionalRanks(sortedPlayers));
+        const finalPlayers = calculatePositionalRanks(sortedPlayers);
+        
+        setPlayersWithHistory(finalPlayers);
+        // Initialisiere History mit dem ersten Zustand
+        setHistory([JSON.parse(JSON.stringify(finalPlayers))]);
+        setHistoryIndex(0);
       };
       reader.readAsText(file);
     }
@@ -142,7 +272,7 @@ const InteractivePlayerTable = () => {
 
   // Toggle für Status-Icons
   const togglePlayerStatus = (playerId, statusKey) => {
-    setPlayers(prev => prev.map(player => 
+    setPlayersWithHistory(prev => prev.map(player => 
         player.id === playerId 
         ? { ...player, [statusKey]: !player[statusKey] }
         : player
@@ -157,10 +287,9 @@ const InteractivePlayerTable = () => {
     }));
   };
 
-
   // Toggle Verfügbarkeit
   const toggleAvailability = (playerId) => {
-    setPlayers(prev => prev.map(player => 
+    setPlayersWithHistory(prev => prev.map(player => 
         player.id === playerId 
         ? { ...player, unavailable: !player.unavailable }
         : player
@@ -175,7 +304,7 @@ const InteractivePlayerTable = () => {
       return;
     }
 
-    setPlayers(prev => {
+    setPlayersWithHistory(prev => {
       const playerIndex = prev.findIndex(p => p.id === playerId);
       if (playerIndex === -1) return prev;
       const player = prev[playerIndex];
@@ -204,7 +333,7 @@ const InteractivePlayerTable = () => {
       return;
     }
     
-    setPlayers(prev => prev.map(player => 
+    setPlayersWithHistory(prev => prev.map(player => 
         player.id === playerId 
         ? { ...player, [field]: value }
         : player
@@ -246,7 +375,7 @@ const InteractivePlayerTable = () => {
         return;
     }
 
-    setPlayers(prevPlayers => {
+    setPlayersWithHistory(prevPlayers => {
         const sourceIndex = prevPlayers.findIndex(p => p.id === draggedItem.id);
         if (sourceIndex === -1) return prevPlayers;
 
@@ -343,19 +472,49 @@ const InteractivePlayerTable = () => {
 
   }, [players, teamFilter, searchQuery, statusFilters, getFilteredByPosition]);
 
-
   const positionButtons = ['Overall', 'QB', 'RB', 'WR', 'TE', 'FLEX', 'K', 'DST'];
 
   return (
     <div className="max-w-7xl mx-auto p-2 sm:p-4 bg-gray-900 text-gray-200 min-h-screen font-sans">
       <div className="bg-gray-800 rounded-lg shadow-2xl overflow-hidden">
-        {/* CSV Upload */}
-        <div className="p-4 bg-gray-700/50 border-b border-gray-700 text-center">
-            <label htmlFor="csv-upload" className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 transition">
-                <UploadCloudIcon className="w-5 h-5" />
-                CSV-Datei importieren
-            </label>
-            <input id="csv-upload" type="file" accept=".csv" onChange={handleFileUpload} className="hidden" />
+        {/* CSV Upload und Export */}
+        <div className="p-4 bg-gray-700/50 border-b border-gray-700 flex flex-wrap items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-4">
+                <label htmlFor="csv-upload" className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 transition">
+                    <UploadCloudIcon className="w-5 h-5" />
+                    CSV importieren
+                </label>
+                <input id="csv-upload" type="file" accept=".csv" onChange={handleFileUpload} className="hidden" />
+                
+                <button
+                    onClick={exportToCSV}
+                    disabled={players.length === 0}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white font-semibold rounded-md hover:bg-green-700 transition disabled:bg-gray-600 disabled:cursor-not-allowed"
+                >
+                    <DownloadIcon className="w-5 h-5" />
+                    CSV exportieren
+                </button>
+            </div>
+            
+            {/* Undo/Redo Buttons */}
+            <div className="flex items-center gap-2">
+                <button
+                    onClick={undo}
+                    disabled={historyIndex <= 0}
+                    className="p-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 transition disabled:bg-gray-700 disabled:cursor-not-allowed"
+                    title="Rückgängig machen"
+                >
+                    <UndoIcon className="w-5 h-5" />
+                </button>
+                <button
+                    onClick={redo}
+                    disabled={historyIndex >= history.length - 1}
+                    className="p-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 transition disabled:bg-gray-700 disabled:cursor-not-allowed"
+                    title="Wiederholen"
+                >
+                    <RedoIcon className="w-5 h-5" />
+                </button>
+            </div>
         </div>
         
         {/* Header mit Filtern */}
@@ -570,4 +729,3 @@ const InteractivePlayerTable = () => {
 export default function App() {
     return <InteractivePlayerTable />;
 }
- 
