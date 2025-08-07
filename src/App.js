@@ -1,88 +1,61 @@
 import React, { useState, useMemo, useCallback, useRef } from 'react';
 
-// Da 'lucide-react' in dieser Umgebung nicht direkt importiert werden kann,
-// definieren wir die benötigten Icons als einfache SVG-Komponenten.
-
+// --- SVG-Icon-Komponenten (unverändert) ---
 const X = (props) => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <path d="M18 6 6 18" />
-    <path d="m6 6 12 12" />
+    <path d="M18 6 6 18" /><path d="m6 6 12 12" />
   </svg>
 );
-
 const Edit2 = (props) => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-        <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
-    </svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+  </svg>
 );
-
 const SearchIcon = (props) => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-        <circle cx="11" cy="11" r="8"></circle>
-        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-    </svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+  </svg>
 );
-
 const StarIcon = (props) => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
-    </svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+  </svg>
 );
-
 const FireIcon = (props) => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-        <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"></path>
-    </svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"></path>
+  </svg>
 );
-
 const SnowflakeIcon = (props) => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-        <line x1="2" y1="12" x2="22" y2="12"></line>
-        <line x1="12" y1="2" x2="12" y2="22"></line>
-        <path d="m20 16-4-4 4-4"></path>
-        <path d="m4 8 4 4-4 4"></path>
-        <path d="m16 4-4 4-4-4"></path>
-        <path d="m8 20 4-4 4 4"></path>
-    </svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <line x1="2" y1="12" x2="22" y2="12"></line><line x1="12" y1="2" x2="12" y2="22"></line><path d="m20 16-4-4 4-4"></path><path d="m4 8 4 4-4 4"></path><path d="m16 4-4 4-4-4"></path><path d="m8 20 4-4 4 4"></path>
+  </svg>
 );
-
 const CheckSquareIcon = (props) => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-        <polyline points="9 11 12 14 22 4"></polyline>
-        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
-    </svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+  </svg>
 );
-
 const UploadCloudIcon = (props) => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-        <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path>
-        <path d="M12 12v9"></path>
-        <path d="m16 16-4-4-4 4"></path>
-    </svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path><path d="M12 12v9"></path><path d="m16 16-4-4-4 4"></path>
+  </svg>
 );
-
 const DownloadIcon = (props) => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-        <polyline points="7 10 12 15 17 10"></polyline>
-        <line x1="12" y1="15" x2="12" y2="3"></line>
-    </svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line>
+  </svg>
 );
-
 const UndoIcon = (props) => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-        <path d="M3 7v6h6"></path>
-        <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path>
-    </svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path>
+  </svg>
 );
-
 const RedoIcon = (props) => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-        <path d="M21 7v6h-6"></path>
-        <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"></path>
-    </svg>
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="M21 7v6h-6"></path><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"></path>
+  </svg>
 );
-
 
 const InteractivePlayerTable = () => {
     const [players, setPlayers] = useState([]);
@@ -109,7 +82,7 @@ const InteractivePlayerTable = () => {
         setHistory(prev => {
             const newHistory = prev.slice(0, historyIndex + 1);
             newHistory.push(JSON.parse(JSON.stringify(newPlayers)));
-            return newHistory.slice(-50); // Limit history to 50 entries
+            return newHistory.slice(-50);
         });
         setHistoryIndex(prev => Math.min(prev + 1, 49));
     }, [historyIndex]);
@@ -166,31 +139,19 @@ const InteractivePlayerTable = () => {
             alert('Keine Daten zum Exportieren vorhanden.');
             return;
         }
-
         const headers = ['RK', 'TIERS', 'PLAYER NAME', 'TEAM', 'POS', 'BYE WEEK', 'SOS SEASON', 'ECR VS. ADP', 'Notes', 'Unavailable', 'Favorite', 'Hot', 'Cold'];
-        
         const csvContent = [
             headers.join(','),
             ...players.map(player => [
-                player.rank,
-                player.tier,
-                `"${player.name}"`,
-                player.team,
+                player.rank, player.tier, `"${player.name}"`, player.team,
                 `"${player.basePos}${players.filter(p => p.basePos === player.basePos && p.rank <= player.rank).length}"`,
-                `"${player.byeWeek}"`,
-                '""',
-                '""',
-                `"${player.notes || ''}"`,
-                player.unavailable ? 'true' : 'false',
-                player.isFavorite ? 'true' : 'false',
-                player.isHot ? 'true' : 'false',
-                player.isCold ? 'true' : 'false'
+                `"${player.byeWeek}"`, '""', '""', `"${player.notes || ''}"`,
+                player.unavailable ? 'true' : 'false', player.isFavorite ? 'true' : 'false',
+                player.isHot ? 'true' : 'false', player.isCold ? 'true' : 'false'
             ].join(','))
         ].join('\n');
-
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
-        
         if (link.download !== undefined) {
             const url = URL.createObjectURL(blob);
             link.setAttribute('href', url);
@@ -212,35 +173,26 @@ const InteractivePlayerTable = () => {
                 const parsedPlayers = rows.map(row => {
                     const columns = row.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g) || [];
                     if (columns.length < 6) return null;
-
                     const rank = parseInt(columns[0].replace(/"/g, ''), 10);
                     const tier = parseInt(columns[1].replace(/"/g, ''), 10);
                     const name = columns[2].replace(/"/g, '');
                     const team = columns[3].replace(/"/g, '');
                     const posRaw = columns[4].replace(/"/g, '');
                     const byeWeek = parseInt(columns[5].replace(/"/g, ''), 10);
-                    
                     const basePos = (posRaw.match(/[A-Z]+/) || [''])[0];
-                    
                     const notes = columns[8] ? columns[8].replace(/"/g, '') : '';
                     const unavailable = columns[9] === 'true';
                     const isFavorite = columns[10] === 'true';
                     const isHot = columns[11] === 'true';
                     const isCold = columns[12] === 'true';
-
                     return {
                         id: rank, rank, tier, name, team, pos: posRaw, basePos, byeWeek,
-                        unavailable: unavailable || false,
-                        notes: notes || '',
-                        isFavorite: isFavorite || false,
-                        isHot: isHot || false,
-                        isCold: isCold || false,
+                        unavailable: unavailable || false, notes: notes || '',
+                        isFavorite: isFavorite || false, isHot: isHot || false, isCold: isCold || false,
                     };
                 }).filter(p => p && !isNaN(p.rank));
-
                 const sortedPlayers = parsedPlayers.sort((a,b) => a.rank - b.rank);
                 const finalPlayers = calculatePositionalRanks(sortedPlayers);
-                
                 setPlayersWithHistory(finalPlayers);
                 setHistory([JSON.parse(JSON.stringify(finalPlayers))]);
                 setHistoryIndex(0);
@@ -250,11 +202,7 @@ const InteractivePlayerTable = () => {
     };
 
     const togglePlayerStatus = (playerId, statusKey) => {
-        setPlayersWithHistory(prev => prev.map(player => 
-            player.id === playerId 
-            ? { ...player, [statusKey]: !player[statusKey] }
-            : player
-        ));
+        setPlayersWithHistory(prev => prev.map(p => p.id === playerId ? { ...p, [statusKey]: !p[statusKey] } : p));
     };
     
     const handleStatusFilterToggle = (filterKey) => {
@@ -262,11 +210,7 @@ const InteractivePlayerTable = () => {
     };
 
     const toggleAvailability = (playerId) => {
-        setPlayersWithHistory(prev => prev.map(player => 
-            player.id === playerId 
-            ? { ...player, unavailable: !player.unavailable }
-            : player
-        ));
+        setPlayersWithHistory(prev => prev.map(p => p.id === playerId ? { ...p, unavailable: !p.unavailable } : p));
     };
 
     const handleRankEdit = (playerId, newRank) => {
@@ -275,23 +219,17 @@ const InteractivePlayerTable = () => {
             setEditingCell(null);
             return;
         }
-
         setPlayersWithHistory(prev => {
             const playerIndex = prev.findIndex(p => p.id === playerId);
             if (playerIndex === -1) return prev;
             const player = prev[playerIndex];
-            
             let newPlayers = [...prev];
             newPlayers.splice(playerIndex, 1);
-            
             const insertIndex = Math.min(targetRank - 1, newPlayers.length);
             newPlayers.splice(insertIndex, 0, player);
-            
             const updatedRanks = newPlayers.map((p, index) => ({ ...p, rank: index + 1 }));
-            
             return calculatePositionalRanks(updatedRanks);
         });
-        
         setEditingCell(null);
     };
 
@@ -300,12 +238,7 @@ const InteractivePlayerTable = () => {
             handleRankEdit(playerId, value);
             return;
         }
-        
-        setPlayersWithHistory(prev => prev.map(player => 
-            player.id === playerId 
-            ? { ...player, [field]: value }
-            : player
-        ));
+        setPlayersWithHistory(prev => prev.map(p => p.id === playerId ? { ...p, [field]: value } : p));
         setEditingCell(null);
     };
 
@@ -333,28 +266,23 @@ const InteractivePlayerTable = () => {
             handleDragEnd();
             return;
         }
-
         setPlayersWithHistory(prevPlayers => {
             const sourceIndex = prevPlayers.findIndex(p => p.id === draggedItem.id);
             if (sourceIndex === -1) return prevPlayers;
-
             let reorderedPlayers = [...prevPlayers];
             const [playerToMove] = reorderedPlayers.splice(sourceIndex, 1);
-
             const currentVisiblePlayers = getFilteredByPosition(prevPlayers)
-                .filter(player => {
-                    if (teamFilter && player.team !== teamFilter) return false;
-                    if (searchQuery && !player.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-                    if (statusFilters.available && player.unavailable) return false;
-                    if (statusFilters.favorite && !player.isFavorite) return false;
-                    if (statusFilters.hot && !player.isHot) return false;
-                    if (statusFilters.cold && !player.isCold) return false;
+                .filter(p => {
+                    if (teamFilter && p.team !== teamFilter) return false;
+                    if (searchQuery && !p.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+                    if (statusFilters.available && p.unavailable) return false;
+                    if (statusFilters.favorite && !p.isFavorite) return false;
+                    if (statusFilters.hot && !p.isHot) return false;
+                    if (statusFilters.cold && !p.isCold) return false;
                     return true;
                 }).sort((a,b) => a.rank - b.rank);
-
             let targetIndexInFullList;
             const dropIndexInVisible = dragOverInfo.index;
-
             if (dropIndexInVisible < currentVisiblePlayers.length) {
                 const targetPlayer = currentVisiblePlayers[dropIndexInVisible];
                 targetIndexInFullList = reorderedPlayers.findIndex(p => p.id === targetPlayer.id);
@@ -362,18 +290,14 @@ const InteractivePlayerTable = () => {
                 const lastVisiblePlayer = currentVisiblePlayers[currentVisiblePlayers.length - 1];
                 targetIndexInFullList = lastVisiblePlayer ? reorderedPlayers.findIndex(p => p.id === lastVisiblePlayer.id) + 1 : reorderedPlayers.length;
             }
-
             if (targetIndexInFullList === -1) {
                 targetIndexInFullList = reorderedPlayers.length;
             }
-
             playerToMove.tier = dragOverInfo.tier;
             reorderedPlayers.splice(targetIndexInFullList, 0, playerToMove);
-
             const finalPlayersWithRanks = reorderedPlayers.map((p, i) => ({ ...p, rank: i + 1 }));
             return calculatePositionalRanks(finalPlayersWithRanks);
         });
-
         handleDragEnd();
     };
 
@@ -397,7 +321,6 @@ const InteractivePlayerTable = () => {
 
     const filteredAndSortedPlayers = useMemo(() => {
         let playersToFilter = getFilteredByPosition(players);
-
         if (statusFilters.available) {
             playersToFilter = playersToFilter.filter(p => !p.unavailable);
         }
@@ -410,15 +333,12 @@ const InteractivePlayerTable = () => {
         if (statusFilters.cold) {
             playersToFilter = playersToFilter.filter(p => p.isCold);
         }
-        
         playersToFilter = playersToFilter.filter(player => {
             if (teamFilter && player.team !== teamFilter) return false;
             if (searchQuery && !player.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
             return true;
         });
-
         return playersToFilter.sort((a,b) => a.rank - b.rank);
-
     }, [players, teamFilter, searchQuery, statusFilters, getFilteredByPosition]);
 
     const positionButtons = ['Overall', 'QB', 'RB', 'WR', 'TE', 'FLEX', 'K', 'DST'];
@@ -431,41 +351,22 @@ const InteractivePlayerTable = () => {
                     <div className="p-4 bg-gray-700/50 border-b border-gray-700 flex flex-wrap items-center justify-between gap-4">
                         <div className="flex flex-wrap items-center gap-4">
                             <label htmlFor="csv-upload" className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 transition">
-                                <UploadCloudIcon className="w-5 h-5" />
-                                CSV importieren
+                                <UploadCloudIcon className="w-5 h-5" /> CSV importieren
                             </label>
                             <input id="csv-upload" type="file" accept=".csv" onChange={handleFileUpload} className="hidden" />
-                            
-                            <button
-                                onClick={exportToCSV}
-                                disabled={players.length === 0}
-                                className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white font-semibold rounded-md hover:bg-green-700 transition disabled:bg-gray-600 disabled:cursor-not-allowed"
-                            >
-                                <DownloadIcon className="w-5 h-5" />
-                                CSV exportieren
+                            <button onClick={exportToCSV} disabled={players.length === 0} className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white font-semibold rounded-md hover:bg-green-700 transition disabled:bg-gray-600 disabled:cursor-not-allowed">
+                                <DownloadIcon className="w-5 h-5" /> CSV exportieren
                             </button>
                         </div>
-                        
                         <div className="flex items-center gap-2">
-                            <button
-                                onClick={undo}
-                                disabled={historyIndex <= 0}
-                                className="p-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 transition disabled:bg-gray-700 disabled:cursor-not-allowed"
-                                title="Rückgängig machen"
-                            >
+                            <button onClick={undo} disabled={historyIndex <= 0} className="p-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 transition disabled:bg-gray-700 disabled:cursor-not-allowed" title="Rückgängig machen">
                                 <UndoIcon className="w-5 h-5" />
                             </button>
-                            <button
-                                onClick={redo}
-                                disabled={historyIndex >= history.length - 1}
-                                className="p-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 transition disabled:bg-gray-700 disabled:cursor-not-allowed"
-                                title="Wiederholen"
-                            >
+                            <button onClick={redo} disabled={historyIndex >= history.length - 1} className="p-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 transition disabled:bg-gray-700 disabled:cursor-not-allowed" title="Wiederholen">
                                 <RedoIcon className="w-5 h-5" />
                             </button>
                         </div>
                     </div>
-                    
                     {/* Header mit Filtern */}
                     <div className="p-3 border-b border-gray-700 flex flex-wrap items-center justify-between gap-y-4">
                         <div className="flex flex-wrap items-center gap-x-6 gap-y-4">
@@ -474,64 +375,28 @@ const InteractivePlayerTable = () => {
                             </button>
                             <div className="flex flex-wrap items-center gap-1 sm:gap-2">
                                 {positionButtons.map(pos => (
-                                <button 
-                                    key={pos}
-                                    onClick={() => setActivePositionFilter(pos)}
-                                    className={`px-3 py-1.5 text-base font-semibold rounded-md transition-all duration-200 ${
-                                    activePositionFilter === pos 
-                                        ? 'bg-blue-600 text-white shadow-md' 
-                                        : 'text-gray-300 hover:text-white hover:bg-gray-600'
-                                    }`}
-                                >
+                                <button key={pos} onClick={() => setActivePositionFilter(pos)} className={`px-3 py-1.5 text-base font-semibold rounded-md transition-all duration-200 ${activePositionFilter === pos ? 'bg-blue-600 text-white shadow-md' : 'text-gray-300 hover:text-white hover:bg-gray-600'}`}>
                                     {pos}
                                 </button>
                                 ))}
                             </div>
                             <div className="flex items-center gap-2">
                                 <label htmlFor="team-filter" className="text-sm font-medium text-gray-400">Team:</label>
-                                <select
-                                id="team-filter"
-                                value={teamFilter}
-                                onChange={(e) => setTeamFilter(e.target.value)}
-                                className="px-3 py-1.5 border border-gray-600 rounded-md bg-gray-700 text-white hover:bg-gray-600 transition focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                >
-                                <option value="">Alle</option>
-                                {uniqueTeams.map(team => (
-                                    <option key={team} value={team}>{team}</option>
-                                ))}
+                                <select id="team-filter" value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} className="px-3 py-1.5 border border-gray-600 rounded-md bg-gray-700 text-white hover:bg-gray-600 transition focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    <option value="">Alle</option>
+                                    {uniqueTeams.map(team => (<option key={team} value={team}>{team}</option>))}
                                 </select>
                             </div>
                             <div className="relative flex items-center">
                                 <SearchIcon className="w-4 h-4 text-gray-400 absolute left-3 pointer-events-none" />
-                                <input
-                                    id="search-filter"
-                                    type="text"
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    placeholder="Suchen..."
-                                    className="w-40 bg-gray-700 border border-gray-600 rounded-md py-1.5 pl-9 pr-8 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                />
-                                {searchQuery && (
-                                    <button
-                                        onClick={() => setSearchQuery('')}
-                                        className="absolute right-2 text-gray-400 hover:text-white"
-                                        aria-label="Suche zurücksetzen"
-                                    >
-                                        <X className="w-4 h-4" />
-                                    </button>
-                                )}
+                                <input id="search-filter" type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Suchen..." className="w-40 bg-gray-700 border border-gray-600 rounded-md py-1.5 pl-9 pr-8 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+                                {searchQuery && (<button onClick={() => setSearchQuery('')} className="absolute right-2 text-gray-400 hover:text-white" aria-label="Suche zurücksetzen"><X className="w-4 h-4" /></button>)}
                             </div>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
-                            <button onClick={() => handleStatusFilterToggle('favorite')} title="Favoriten" className={`p-2 rounded-md transition-colors ${statusFilters.favorite ? 'bg-yellow-500 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}>
-                                <StarIcon className="w-5 h-5" />
-                            </button>
-                            <button onClick={() => handleStatusFilterToggle('hot')} title="Hot" className={`p-2 rounded-md transition-colors ${statusFilters.hot ? 'bg-red-600 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}>
-                                <FireIcon className="w-5 h-5" />
-                            </button>
-                            <button onClick={() => handleStatusFilterToggle('cold')} title="Cold" className={`p-2 rounded-md transition-colors ${statusFilters.cold ? 'bg-blue-500 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}>
-                                <SnowflakeIcon className="w-5 h-5" />
-                            </button>
+                            <button onClick={() => handleStatusFilterToggle('favorite')} title="Favoriten" className={`p-2 rounded-md transition-colors ${statusFilters.favorite ? 'bg-yellow-500 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}><StarIcon className="w-5 h-5" /></button>
+                            <button onClick={() => handleStatusFilterToggle('hot')} title="Hot" className={`p-2 rounded-md transition-colors ${statusFilters.hot ? 'bg-red-600 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}><FireIcon className="w-5 h-5" /></button>
+                            <button onClick={() => handleStatusFilterToggle('cold')} title="Cold" className={`p-2 rounded-md transition-colors ${statusFilters.cold ? 'bg-blue-500 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}><SnowflakeIcon className="w-5 h-5" /></button>
                         </div>
                     </div>
                 </div>
@@ -555,14 +420,11 @@ const InteractivePlayerTable = () => {
                         <tbody onDragLeave={handleDragLeave}>
                             {filteredAndSortedPlayers.length > 0 ? filteredAndSortedPlayers.map((player, index) => {
                                 const showTierHeader = index === 0 || player.tier !== filteredAndSortedPlayers[index - 1].tier;
-                                
                                 return (
                                     <React.Fragment key={player.id}>
                                         {showTierHeader && (
-                                            <tr 
-                                                className="sticky top-[57px] bg-blue-800/80 backdrop-blur-sm text-white z-10"
-                                                onDragOver={(e) => handleDragOver(e, index, player.tier)}
-                                            >
+                                            // KORREKTUR: "sticky" und verwandte Klassen wurden von dieser Zeile entfernt.
+                                            <tr className="bg-blue-800/50 text-white" onDragOver={(e) => handleDragOver(e, index, player.tier)}>
                                                 <td colSpan="10" className="px-4 py-1 text-sm font-bold tracking-wider">
                                                     Tier {player.tier}
                                                 </td>
@@ -571,73 +433,36 @@ const InteractivePlayerTable = () => {
                                         {dragOverInfo.index === index && (
                                             <tr><td colSpan="10" className="p-0"><div className="h-1 bg-blue-500 rounded-full"></div></td></tr>
                                         )}
-                                        <tr 
-                                            className={`border-b border-gray-700 hover:bg-gray-700/50 transition-colors duration-150 cursor-grab active:cursor-grabbing
-                                                ${draggedItem?.id === player.id ? 'opacity-30 bg-gray-700' : ''}
-                                                ${player.unavailable ? 'opacity-50 bg-gray-800/60' : ''}`}
-                                            draggable
-                                            onDragStart={(e) => handleDragStart(e, player)}
-                                            onDragOver={(e) => handleDragOver(e, index, player.tier)}
-                                            onDragEnd={handleDragEnd}
-                                        >
+                                        <tr className={`border-b border-gray-700 hover:bg-gray-700/50 transition-colors duration-150 cursor-grab active:cursor-grabbing ${draggedItem?.id === player.id ? 'opacity-30 bg-gray-700' : ''} ${player.unavailable ? 'opacity-50 bg-gray-800/60' : ''}`}
+                                            draggable onDragStart={(e) => handleDragStart(e, player)} onDragOver={(e) => handleDragOver(e, index, player.tier)} onDragEnd={handleDragEnd}>
                                             <td className="p-3 text-center">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={player.unavailable}
-                                                    onChange={() => toggleAvailability(player.id)}
-                                                    className="w-4 h-4 cursor-pointer bg-gray-600 border-gray-500 rounded text-blue-500 focus:ring-blue-500"
-                                                />
+                                                <input type="checkbox" checked={player.unavailable} onChange={() => toggleAvailability(player.id)} className="w-4 h-4 cursor-pointer bg-gray-600 border-gray-500 rounded text-blue-500 focus:ring-blue-500"/>
                                             </td>
                                             <td className={`p-3 text-center ${player.unavailable ? 'line-through text-gray-500' : ''}`}>
                                                 {editingCell === `${player.id}-rank` ? (
-                                                <input
-                                                    type="number"
-                                                    defaultValue={player.rank}
-                                                    onBlur={(e) => handleCellEdit(player.id, 'rank', e.target.value)}
-                                                    onKeyPress={(e) => e.key === 'Enter' && e.target.blur()}
-                                                    className="px-2 py-1 border border-gray-600 rounded bg-gray-900 w-16 text-center"
-                                                    autoFocus
-                                                />
+                                                <input type="number" defaultValue={player.rank} onBlur={(e) => handleCellEdit(player.id, 'rank', e.target.value)} onKeyPress={(e) => e.key === 'Enter' && e.target.blur()} className="px-2 py-1 border border-gray-600 rounded bg-gray-900 w-16 text-center" autoFocus/>
                                                 ) : (
-                                                <span 
-                                                    className="cursor-pointer hover:bg-gray-600/50 px-2 py-1 rounded inline-flex items-center gap-1 group"
-                                                    onClick={() => setEditingCell(`${player.id}-rank`)}
-                                                >
+                                                <span className="cursor-pointer hover:bg-gray-600/50 px-2 py-1 rounded inline-flex items-center gap-1 group" onClick={() => setEditingCell(`${player.id}-rank`)}>
                                                     {player.rank}
                                                     <Edit2 className="w-3 h-3 text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity" />
                                                 </span>
                                                 )}
                                             </td>
                                             <td className={`p-3 group ${player.unavailable ? 'line-through text-gray-500' : ''}`}>
-                                                <span className="font-medium text-gray-100">
-                                                    {player.name}
-                                                </span>
+                                                <span className="font-medium text-gray-100">{player.name}</span>
                                             </td>
                                             <td className={`p-3 ${player.unavailable ? 'line-through text-gray-500' : ''}`}>
                                                 <span className="font-semibold text-gray-400">{player.team}</span>
                                             </td>
-                                            <td className={`p-3 ${player.unavailable ? 'line-through text-gray-500' : 'text-gray-300'}`}>
-                                                {player.pos}
-                                            </td>
+                                            <td className={`p-3 ${player.unavailable ? 'line-through text-gray-500' : 'text-gray-300'}`}>{player.pos}</td>
                                             <td className={`p-3 text-center ${player.unavailable ? 'line-through text-gray-500' : ''}`}>
                                                 <span className="font-medium">{player.byeWeek}</span>
                                             </td>
                                             <td className="p-3">
                                                 {editingCell === `${player.id}-notes` ? (
-                                                <input
-                                                    type="text"
-                                                    defaultValue={player.notes}
-                                                    onBlur={(e) => handleCellEdit(player.id, 'notes', e.target.value)}
-                                                    onKeyPress={(e) => e.key === 'Enter' && e.target.blur()}
-                                                    className="px-2 py-1 border border-gray-600 rounded bg-gray-900 w-full"
-                                                    placeholder="Notiz hinzufügen..."
-                                                    autoFocus
-                                                />
+                                                <input type="text" defaultValue={player.notes} onBlur={(e) => handleCellEdit(player.id, 'notes', e.target.value)} onKeyPress={(e) => e.key === 'Enter' && e.target.blur()} className="px-2 py-1 border border-gray-600 rounded bg-gray-900 w-full" placeholder="Notiz hinzufügen..." autoFocus/>
                                                 ) : (
-                                                <span 
-                                                    className={`cursor-pointer hover:bg-gray-600/50 px-2 py-1 rounded block min-h-[28px] w-full ${player.notes ? 'text-gray-300' : 'text-gray-500'}`}
-                                                    onClick={() => setEditingCell(`${player.id}-notes`)}
-                                                >
+                                                <span className={`cursor-pointer hover:bg-gray-600/50 px-2 py-1 rounded block min-h-[28px] w-full ${player.notes ? 'text-gray-300' : 'text-gray-500'}`} onClick={() => setEditingCell(`${player.id}-notes`)}>
                                                     {player.notes || '+ Notiz'}
                                                 </span>
                                                 )}
