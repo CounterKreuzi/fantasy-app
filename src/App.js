@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback, useRef } from 'react';
 
-// --- SVG-Icon-Komponenten (unverändert) ---
+// --- SVG-Icon-Komponenten (vollständig und unverändert) ---
 const X = (props) => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
     <path d="M18 6 6 18" /><path d="m6 6 12 12" />
@@ -58,53 +58,201 @@ const RedoIcon = (props) => (
 );
 
 const InteractivePlayerTable = () => {
-    // --- States (unverändert) ---
     const [players, setPlayers] = useState([]);
     const [activePositionFilter, setActivePositionFilter] = useState('Overall');
     const [teamFilter, setTeamFilter] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
-    const [statusFilters, setStatusFilters] = useState({ /* ... */ });
+    const [statusFilters, setStatusFilters] = useState({
+        favorite: false,
+        hot: false,
+        cold: false,
+        available: false,
+    });
     const [editingCell, setEditingCell] = useState(null);
     const [draggedItem, setDraggedItem] = useState(null);
-    // State für Drag-Over-Info wurde präzisiert
     const [dragOverInfo, setDragOverInfo] = useState({ dropIndex: null, targetTier: null });
 
-    // --- Undo/Redo Logik (unverändert) ---
     const [history, setHistory] = useState([]);
     const [historyIndex, setHistoryIndex] = useState(-1);
     const isPerformingHistoryAction = useRef(false);
-    const addToHistory = useCallback((newPlayers) => { /* ... */ }, []);
-    const undo = useCallback(() => { /* ... */ }, []);
-    const redo = useCallback(() => { /* ... */ }, []);
-    const setPlayersWithHistory = useCallback((updateFunction) => { /* ... */ }, []);
 
-    // --- Helper-Funktionen (unverändert) ---
+    const addToHistory = useCallback((newPlayers) => {
+        if (isPerformingHistoryAction.current) return;
+        setHistory(prev => {
+            const newHistory = prev.slice(0, historyIndex + 1);
+            newHistory.push(JSON.parse(JSON.stringify(newPlayers)));
+            return newHistory.slice(-50);
+        });
+        setHistoryIndex(prev => Math.min(prev + 1, 49));
+    }, [historyIndex]);
+
+    const undo = useCallback(() => {
+        if (historyIndex > 0) {
+            isPerformingHistoryAction.current = true;
+            const previousState = history[historyIndex - 1];
+            setPlayers(JSON.parse(JSON.stringify(previousState)));
+            setHistoryIndex(prev => prev - 1);
+            setTimeout(() => { isPerformingHistoryAction.current = false; }, 0);
+        }
+    }, [history, historyIndex]);
+
+    const redo = useCallback(() => {
+        if (historyIndex < history.length - 1) {
+            isPerformingHistoryAction.current = true;
+            const nextState = history[historyIndex + 1];
+            setPlayers(JSON.parse(JSON.stringify(nextState)));
+            setHistoryIndex(prev => prev + 1);
+            setTimeout(() => { isPerformingHistoryAction.current = false; }, 0);
+        }
+    }, [history, historyIndex]);
+
+    const setPlayersWithHistory = useCallback((updateFunction) => {
+        setPlayers(prev => {
+            const newPlayers = typeof updateFunction === 'function' ? updateFunction(prev) : updateFunction;
+            if (!isPerformingHistoryAction.current && JSON.stringify(prev) !== JSON.stringify(newPlayers)) {
+                setTimeout(() => addToHistory(newPlayers), 0);
+            }
+            return newPlayers;
+        });
+    }, [addToHistory]);
+
     const uniqueTeams = [...new Set(players.map(p => p.team))].sort();
-    const calculatePositionalRanks = (playerList) => { /* ... */ };
-    const exportToCSV = () => { /* ... */ };
-    const handleFileUpload = (event) => { /* ... */ };
-    const togglePlayerStatus = (playerId, statusKey) => { /* ... */ };
-    const handleStatusFilterToggle = (filterKey) => { /* ... */ };
-    const toggleAvailability = (playerId) => { /* ... */ };
-    const handleRankEdit = (playerId, newRank) => { /* ... */ };
-    const handleCellEdit = (playerId, field, value) => { /* ... */ };
 
-    // --- Drag & Drop Logik (überarbeitet) ---
+    const calculatePositionalRanks = (playerList) => {
+        const positionCounts = {};
+        const sortedList = [...playerList].sort((a, b) => a.rank - b.rank);
+        return sortedList.map(player => {
+            if (!positionCounts[player.basePos]) {
+                positionCounts[player.basePos] = 0;
+            }
+            positionCounts[player.basePos]++;
+            return {
+                ...player,
+                pos: `${player.basePos}${positionCounts[player.basePos]}`
+            };
+        });
+    };
+
+    const exportToCSV = () => {
+        if (players.length === 0) {
+            alert('Keine Daten zum Exportieren vorhanden.');
+            return;
+        }
+        const headers = ['RK', 'TIERS', 'PLAYER NAME', 'TEAM', 'POS', 'BYE WEEK', 'SOS SEASON', 'ECR VS. ADP', 'Notes', 'Unavailable', 'Favorite', 'Hot', 'Cold'];
+        const csvContent = [
+            headers.join(','),
+            ...players.map(player => [
+                player.rank, player.tier, `"${player.name}"`, player.team,
+                `"${player.basePos}${players.filter(p => p.basePos === player.basePos && p.rank <= player.rank).length}"`,
+                `"${player.byeWeek}"`, '""', '""', `"${player.notes || ''}"`,
+                player.unavailable ? 'true' : 'false', player.isFavorite ? 'true' : 'false',
+                player.isHot ? 'true' : 'false', player.isCold ? 'true' : 'false'
+            ].join(','))
+        ].join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        if (link.download !== undefined) {
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', `fantasy-rankings-${new Date().toISOString().split('T')[0]}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    };
+
+    const handleFileUpload = (event) => {
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const text = e.target.result;
+                const rows = text.split('\n').slice(1);
+                const parsedPlayers = rows.map(row => {
+                    const columns = row.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g) || [];
+                    if (columns.length < 6) return null;
+                    const rank = parseInt(columns[0].replace(/"/g, ''), 10);
+                    const tier = parseInt(columns[1].replace(/"/g, ''), 10);
+                    const name = columns[2].replace(/"/g, '');
+                    const team = columns[3].replace(/"/g, '');
+                    const posRaw = columns[4].replace(/"/g, '');
+                    const byeWeek = parseInt(columns[5].replace(/"/g, ''), 10);
+                    const basePos = (posRaw.match(/[A-Z]+/) || [''])[0];
+                    const notes = columns[8] ? columns[8].replace(/"/g, '') : '';
+                    const unavailable = columns[9] === 'true';
+                    const isFavorite = columns[10] === 'true';
+                    const isHot = columns[11] === 'true';
+                    const isCold = columns[12] === 'true';
+                    return {
+                        id: rank, rank, tier, name, team, pos: posRaw, basePos, byeWeek,
+                        unavailable: unavailable || false, notes: notes || '',
+                        isFavorite: isFavorite || false, isHot: isHot || false, isCold: isCold || false,
+                    };
+                }).filter(p => p && !isNaN(p.rank));
+                const sortedPlayers = parsedPlayers.sort((a,b) => a.rank - b.rank);
+                const finalPlayers = calculatePositionalRanks(sortedPlayers);
+                setPlayersWithHistory(finalPlayers);
+                setHistory([JSON.parse(JSON.stringify(finalPlayers))]);
+                setHistoryIndex(0);
+            };
+            reader.readAsText(file);
+        }
+    };
+
+    const togglePlayerStatus = (playerId, statusKey) => {
+        setPlayersWithHistory(prev => prev.map(p => p.id === playerId ? { ...p, [statusKey]: !p[statusKey] } : p));
+    };
+    
+    const handleStatusFilterToggle = (filterKey) => {
+        setStatusFilters(prev => ({ ...prev, [filterKey]: !prev[filterKey] }));
+    };
+
+    const toggleAvailability = (playerId) => {
+        setPlayersWithHistory(prev => prev.map(p => p.id === playerId ? { ...p, unavailable: !p.unavailable } : p));
+    };
+
+    const handleRankEdit = (playerId, newRank) => {
+        const targetRank = parseInt(newRank);
+        if (isNaN(targetRank) || targetRank < 1) {
+            setEditingCell(null);
+            return;
+        }
+        setPlayersWithHistory(prev => {
+            const playerIndex = prev.findIndex(p => p.id === playerId);
+            if (playerIndex === -1) return prev;
+            const player = prev[playerIndex];
+            let newPlayers = [...prev];
+            newPlayers.splice(playerIndex, 1);
+            const insertIndex = Math.min(targetRank - 1, newPlayers.length);
+            newPlayers.splice(insertIndex, 0, player);
+            const updatedRanks = newPlayers.map((p, index) => ({ ...p, rank: index + 1 }));
+            return calculatePositionalRanks(updatedRanks);
+        });
+        setEditingCell(null);
+    };
+
+    const handleCellEdit = (playerId, field, value) => {
+        if (field === 'rank') {
+            handleRankEdit(playerId, value);
+            return;
+        }
+        setPlayersWithHistory(prev => prev.map(p => p.id === playerId ? { ...p, [field]: value } : p));
+        setEditingCell(null);
+    };
+
     const handleDragStart = (e, player) => {
         setDraggedItem(player);
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/plain', player.id);
     };
 
-    // KORREKTUR (BUG 1): `handleDragOver` wurde überarbeitet, um die exakte Drop-Position (oben/unten) und das korrekte Ziel-Tier zu ermitteln.
     const handleDragOver = (e, player, indexInVisibleList) => {
         e.preventDefault();
         if (!draggedItem) return;
-
         const rect = e.currentTarget.getBoundingClientRect();
         const y = e.clientY - rect.top;
         const isTopHalf = y < rect.height / 2;
-
         if (isTopHalf) {
             setDragOverInfo({
                 dropIndex: indexInVisibleList,
@@ -113,12 +261,11 @@ const InteractivePlayerTable = () => {
         } else {
             setDragOverInfo({
                 dropIndex: indexInVisibleList + 1,
-                targetTier: player.tier // Wichtig: Das Tier der aktuellen Zeile wird beibehalten!
+                targetTier: player.tier
             });
         }
     };
     
-    // `handleDragOver` für Tier-Header, um Dragging über sie zu ermöglichen
     const handleDragOverTierHeader = (e, tier, firstPlayerIndexOfTier) => {
         e.preventDefault();
         if (!draggedItem) return;
@@ -134,39 +281,37 @@ const InteractivePlayerTable = () => {
         }
     };
 
-    // KORREKTUR (BUG 1 & 2): `handleDrop` wurde komplett neu geschrieben, um beide Bugs zu beheben.
     const handleDrop = (e) => {
         e.preventDefault();
         if (!draggedItem || dragOverInfo.dropIndex === null) {
             handleDragEnd();
             return;
         }
-
         setPlayersWithHistory(prevPlayers => {
-            // Schritt 1: Finde den Start-Index des gezogenen Spielers in der aktuell sichtbaren Liste.
-            const sourceIndexInVisible = filteredAndSortedPlayers.findIndex(p => p.id === draggedItem.id);
-            
-            // KORREKTUR (BUG 2): Abbrechen, wenn sich nichts ändert.
-            // Verhindert das Verschwinden des Spielers.
-            const isDroppingInSamePlace = sourceIndexInVisible === dragOverInfo.dropIndex || sourceIndexInVisible + 1 === dragOverInfo.dropIndex;
-            if (isDroppingInSamePlace) {
-                return prevPlayers; // Keine Änderung, gib den alten State zurück.
+            const visiblePlayers = getFilteredByPosition(prevPlayers)
+                .filter(p => {
+                    if (teamFilter && p.team !== teamFilter) return false;
+                    if (searchQuery && !p.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+                    if (statusFilters.available && p.unavailable) return false;
+                    if (statusFilters.favorite && !p.isFavorite) return false;
+                    if (statusFilters.hot && !p.isHot) return false;
+                    if (statusFilters.cold && !p.isCold) return false;
+                    return true;
+                }).sort((a,b) => a.rank - b.rank);
+
+            const sourceIndexInVisible = visiblePlayers.findIndex(p => p.id === draggedItem.id);
+            const dropIndexInVisible = dragOverInfo.dropIndex;
+
+            if (sourceIndexInVisible === dropIndexInVisible || sourceIndexInVisible + 1 === dropIndexInVisible) {
+                return prevPlayers;
             }
 
-            // Schritt 2: Finde den Spieler, der bewegt werden soll.
             const playerToMove = { ...draggedItem, tier: dragOverInfo.targetTier };
-
-            // Schritt 3: Erstelle eine neue Liste OHNE den bewegten Spieler.
-            // Wir arbeiten mit der ungefilterten Gesamtliste.
             let reorderedPlayers = prevPlayers.filter(p => p.id !== draggedItem.id);
 
-            // Schritt 4: Finde den Einfügepunkt in der Gesamtliste.
-            const dropIndexInVisible = dragOverInfo.dropIndex;
             let finalInsertIndex;
-
-            if (dropIndexInVisible >= filteredAndSortedPlayers.length) {
-                // Drop am Ende der sichtbaren Liste
-                const lastVisiblePlayer = filteredAndSortedPlayers[filteredAndSortedPlayers.length - 1];
+            if (dropIndexInVisible >= visiblePlayers.length) {
+                const lastVisiblePlayer = visiblePlayers[visiblePlayers.length - 1];
                 if (lastVisiblePlayer) {
                     const idx = reorderedPlayers.findIndex(p => p.id === lastVisiblePlayer.id);
                     finalInsertIndex = idx + 1;
@@ -174,24 +319,19 @@ const InteractivePlayerTable = () => {
                     finalInsertIndex = reorderedPlayers.length;
                 }
             } else {
-                // Drop vor einem existierenden Spieler in der sichtbaren Liste
-                const targetPlayerInVisibleList = filteredAndSortedPlayers[dropIndexInVisible];
+                const targetPlayerInVisibleList = visiblePlayers[dropIndexInVisible];
                 finalInsertIndex = reorderedPlayers.findIndex(p => p.id === targetPlayerInVisibleList.id);
             }
             
-            // Fallback, falls etwas schiefgeht
             if (finalInsertIndex === -1) {
                 finalInsertIndex = reorderedPlayers.length;
             }
 
-            // Schritt 5: Füge den Spieler an der neuen Position ein.
             reorderedPlayers.splice(finalInsertIndex, 0, playerToMove);
 
-            // Schritt 6: Berechne Ränge neu und gib den finalen State zurück.
             const finalPlayersWithRanks = reorderedPlayers.map((p, i) => ({ ...p, rank: i + 1 }));
             return calculatePositionalRanks(finalPlayersWithRanks);
         });
-
         handleDragEnd();
     };
 
@@ -200,25 +340,113 @@ const InteractivePlayerTable = () => {
         setDragOverInfo({ dropIndex: null, targetTier: null });
     };
 
-    // --- Filter- und Sortierlogik (unverändert) ---
-    const getFilteredByPosition = useCallback((playersList) => { /* ... */ }, []);
-    const filteredAndSortedPlayers = useMemo(() => { /* ... */ }, []);
+    const getFilteredByPosition = useCallback((playersList) => {
+        switch(activePositionFilter) {
+            case 'QB': return playersList.filter(p => p.basePos === 'QB');
+            case 'RB': return playersList.filter(p => p.basePos === 'RB');
+            case 'WR': return playersList.filter(p => p.basePos === 'WR');
+            case 'TE': return playersList.filter(p => p.basePos === 'TE');
+            case 'FLEX': return playersList.filter(p => ['RB', 'WR', 'TE'].includes(p.basePos));
+            case 'K': return playersList.filter(p => p.basePos === 'K');
+            case 'DST': return playersList.filter(p => p.basePos === 'DST');
+            default: return playersList;
+        }
+    }, [activePositionFilter]);
+
+    const filteredAndSortedPlayers = useMemo(() => {
+        let playersToFilter = getFilteredByPosition(players);
+        if (statusFilters.available) {
+            playersToFilter = playersToFilter.filter(p => !p.unavailable);
+        }
+        if (statusFilters.favorite) {
+            playersToFilter = playersToFilter.filter(p => p.isFavorite);
+        }
+        if (statusFilters.hot) {
+            playersToFilter = playersToFilter.filter(p => p.isHot);
+        }
+        if (statusFilters.cold) {
+            playersToFilter = playersToFilter.filter(p => p.isCold);
+        }
+        playersToFilter = playersToFilter.filter(player => {
+            if (teamFilter && player.team !== teamFilter) return false;
+            if (searchQuery && !player.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+            return true;
+        });
+        return playersToFilter.sort((a,b) => a.rank - b.rank);
+    }, [players, teamFilter, searchQuery, statusFilters, getFilteredByPosition]);
+
     const positionButtons = ['Overall', 'QB', 'RB', 'WR', 'TE', 'FLEX', 'K', 'DST'];
 
     return (
         <div className="max-w-7xl mx-auto p-2 sm:p-4 bg-gray-900 text-gray-200 min-h-screen font-sans">
             <div className="bg-gray-800 rounded-lg shadow-2xl flex flex-col h-[calc(100vh-2rem)]">
-                {/* OBERER BEREICH: Bleibt immer sichtbar (unverändert) */}
                 <div className="flex-shrink-0">
-                    {/* ... Filter und Buttons ... */}
+                    <div className="p-4 bg-gray-700/50 border-b border-gray-700 flex flex-wrap items-center justify-between gap-4">
+                        <div className="flex flex-wrap items-center gap-4">
+                            <label htmlFor="csv-upload" className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 transition">
+                                <UploadCloudIcon className="w-5 h-5" /> CSV importieren
+                            </label>
+                            <input id="csv-upload" type="file" accept=".csv" onChange={handleFileUpload} className="hidden" />
+                            <button onClick={exportToCSV} disabled={players.length === 0} className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white font-semibold rounded-md hover:bg-green-700 transition disabled:bg-gray-600 disabled:cursor-not-allowed">
+                                <DownloadIcon className="w-5 h-5" /> CSV exportieren
+                            </button>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button onClick={undo} disabled={historyIndex <= 0} className="p-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 transition disabled:bg-gray-700 disabled:cursor-not-allowed" title="Rückgängig machen">
+                                <UndoIcon className="w-5 h-5" />
+                            </button>
+                            <button onClick={redo} disabled={historyIndex >= history.length - 1} className="p-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 transition disabled:bg-gray-700 disabled:cursor-not-allowed" title="Wiederholen">
+                                <RedoIcon className="w-5 h-5" />
+                            </button>
+                        </div>
+                    </div>
+                    <div className="p-3 border-b border-gray-700 flex flex-wrap items-center justify-between gap-y-4">
+                        <div className="flex flex-wrap items-center gap-x-6 gap-y-4">
+                            <button onClick={() => handleStatusFilterToggle('available')} title="Nur verfügbare Spieler" className={`p-2 rounded-md transition-colors ${statusFilters.available ? 'bg-green-600 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}>
+                                <CheckSquareIcon className="w-5 h-5" />
+                            </button>
+                            <div className="flex flex-wrap items-center gap-1 sm:gap-2">
+                                {positionButtons.map(pos => (
+                                <button key={pos} onClick={() => setActivePositionFilter(pos)} className={`px-3 py-1.5 text-base font-semibold rounded-md transition-all duration-200 ${activePositionFilter === pos ? 'bg-blue-600 text-white shadow-md' : 'text-gray-300 hover:text-white hover:bg-gray-600'}`}>
+                                    {pos}
+                                </button>
+                                ))}
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <label htmlFor="team-filter" className="text-sm font-medium text-gray-400">Team:</label>
+                                <select id="team-filter" value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} className="px-3 py-1.5 border border-gray-600 rounded-md bg-gray-700 text-white hover:bg-gray-600 transition focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    <option value="">Alle</option>
+                                    {uniqueTeams.map(team => (<option key={team} value={team}>{team}</option>))}
+                                </select>
+                            </div>
+                            <div className="relative flex items-center">
+                                <SearchIcon className="w-4 h-4 text-gray-400 absolute left-3 pointer-events-none" />
+                                <input id="search-filter" type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Suchen..." className="w-40 bg-gray-700 border border-gray-600 rounded-md py-1.5 pl-9 pr-8 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+                                {searchQuery && (<button onClick={() => setSearchQuery('')} className="absolute right-2 text-gray-400 hover:text-white" aria-label="Suche zurücksetzen"><X className="w-4 h-4" /></button>)}
+                            </div>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <button onClick={() => handleStatusFilterToggle('favorite')} title="Favoriten" className={`p-2 rounded-md transition-colors ${statusFilters.favorite ? 'bg-yellow-500 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}><StarIcon className="w-5 h-5" /></button>
+                            <button onClick={() => handleStatusFilterToggle('hot')} title="Hot" className={`p-2 rounded-md transition-colors ${statusFilters.hot ? 'bg-red-600 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}><FireIcon className="w-5 h-5" /></button>
+                            <button onClick={() => handleStatusFilterToggle('cold')} title="Cold" className={`p-2 rounded-md transition-colors ${statusFilters.cold ? 'bg-blue-500 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}><SnowflakeIcon className="w-5 h-5" /></button>
+                        </div>
+                    </div>
                 </div>
 
-                {/* SCROLL-BEREICH (unverändert) */}
                 <div className="flex-grow overflow-y-auto relative" onDrop={handleDrop} onDragOver={(e) => e.preventDefault()}>
                     <table className="w-full min-w-[900px]">
                         <thead className="bg-gray-800">
                             <tr className="sticky top-0 bg-gray-800 z-20 border-b-2 border-gray-600">
-                                {/* ... Tabellen-Header ... */}
+                                <th className="p-3 text-center w-12 font-semibold">✓</th>
+                                <th className="p-3 text-left font-semibold">RK</th>
+                                <th className="p-3 text-left font-semibold">PLAYER NAME</th>
+                                <th className="p-3 text-left font-semibold">TEAM</th>
+                                <th className="p-3 text-left font-semibold">POS</th>
+                                <th className="p-3 text-center font-semibold">BYE</th>
+                                <th className="p-3 text-left min-w-[200px] font-semibold">NOTIZEN</th>
+                                <th className="p-3 text-center w-12 font-semibold"><StarIcon className="w-4 h-4 mx-auto" /></th>
+                                <th className="p-3 text-center w-12 font-semibold"><FireIcon className="w-4 h-4 mx-auto" /></th>
+                                <th className="p-3 text-center w-12 font-semibold"><SnowflakeIcon className="w-4 h-4 mx-auto" /></th>
                             </tr>
                         </thead>
                         <tbody onDragLeave={handleDragLeave}>
@@ -233,24 +461,59 @@ const InteractivePlayerTable = () => {
                                                 </td>
                                             </tr>
                                         )}
-                                        
-                                        {/* Drop-Indikator */}
                                         {dragOverInfo.dropIndex === index && (
                                             <tr><td colSpan="10" className="p-0"><div className="h-1 bg-blue-500 rounded-full"></div></td></tr>
                                         )}
-                                        
                                         <tr className={`border-b border-gray-700 hover:bg-gray-700/50 transition-colors duration-150 cursor-grab active:cursor-grabbing ${draggedItem?.id === player.id ? 'opacity-30 bg-gray-700' : ''} ${player.unavailable ? 'opacity-50 bg-gray-800/60' : ''}`}
-                                            draggable 
-                                            onDragStart={(e) => handleDragStart(e, player)} 
-                                            // Wichtig: handleDragOver bekommt jetzt den Index in der *sichtbaren* Liste
-                                            onDragOver={(e) => handleDragOver(e, player, index)} 
-                                            onDragEnd={handleDragEnd}>
-                                            
-                                            {/* --- Zellen-Inhalt (unverändert) --- */}
-                                            {/* ... */}
+                                            draggable onDragStart={(e) => handleDragStart(e, player)} onDragOver={(e) => handleDragOver(e, player, index)} onDragEnd={handleDragEnd}>
+                                            <td className="p-3 text-center">
+                                                <input type="checkbox" checked={player.unavailable} onChange={() => toggleAvailability(player.id)} className="w-4 h-4 cursor-pointer bg-gray-600 border-gray-500 rounded text-blue-500 focus:ring-blue-500"/>
+                                            </td>
+                                            <td className={`p-3 text-center ${player.unavailable ? 'line-through text-gray-500' : ''}`}>
+                                                {editingCell === `${player.id}-rank` ? (
+                                                <input type="number" defaultValue={player.rank} onBlur={(e) => handleCellEdit(player.id, 'rank', e.target.value)} onKeyPress={(e) => e.key === 'Enter' && e.target.blur()} className="px-2 py-1 border border-gray-600 rounded bg-gray-900 w-16 text-center" autoFocus/>
+                                                ) : (
+                                                <span className="cursor-pointer hover:bg-gray-600/50 px-2 py-1 rounded inline-flex items-center gap-1 group" onClick={() => setEditingCell(`${player.id}-rank`)}>
+                                                    {player.rank}
+                                                    <Edit2 className="w-3 h-3 text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                </span>
+                                                )}
+                                            </td>
+                                            <td className={`p-3 group ${player.unavailable ? 'line-through text-gray-500' : ''}`}>
+                                                <span className="font-medium text-gray-100">{player.name}</span>
+                                            </td>
+                                            <td className={`p-3 ${player.unavailable ? 'line-through text-gray-500' : ''}`}>
+                                                <span className="font-semibold text-gray-400">{player.team}</span>
+                                            </td>
+                                            <td className={`p-3 ${player.unavailable ? 'line-through text-gray-500' : 'text-gray-300'}`}>{player.pos}</td>
+                                            <td className={`p-3 text-center ${player.unavailable ? 'line-through text-gray-500' : ''}`}>
+                                                <span className="font-medium">{player.byeWeek}</span>
+                                            </td>
+                                            <td className="p-3">
+                                                {editingCell === `${player.id}-notes` ? (
+                                                <input type="text" defaultValue={player.notes} onBlur={(e) => handleCellEdit(player.id, 'notes', e.target.value)} onKeyPress={(e) => e.key === 'Enter' && e.target.blur()} className="px-2 py-1 border border-gray-600 rounded bg-gray-900 w-full" placeholder="Notiz hinzufügen..." autoFocus/>
+                                                ) : (
+                                                <span className={`cursor-pointer hover:bg-gray-600/50 px-2 py-1 rounded block min-h-[28px] w-full ${player.notes ? 'text-gray-300' : 'text-gray-500'}`} onClick={() => setEditingCell(`${player.id}-notes`)}>
+                                                    {player.notes || '+ Notiz'}
+                                                </span>
+                                                )}
+                                            </td>
+                                            <td className="p-3 text-center">
+                                                <button onClick={() => togglePlayerStatus(player.id, 'isFavorite')} className={`p-1 rounded-full transition-colors ${player.isFavorite ? 'text-yellow-400' : 'text-gray-600 hover:text-yellow-400'}`}>
+                                                    <StarIcon className="w-5 h-5" fill={player.isFavorite ? 'currentColor' : 'none'} />
+                                                </button>
+                                            </td>
+                                            <td className="p-3 text-center">
+                                                <button onClick={() => togglePlayerStatus(player.id, 'isHot')} className={`p-1 rounded-full transition-colors ${player.isHot ? 'text-red-500' : 'text-gray-600 hover:text-red-500'}`}>
+                                                    <FireIcon className="w-5 h-5" />
+                                                </button>
+                                            </td>
+                                            <td className="p-3 text-center">
+                                                <button onClick={() => togglePlayerStatus(player.id, 'isCold')} className={`p-1 rounded-full transition-colors ${player.isCold ? 'text-blue-400' : 'text-gray-600 hover:text-blue-400'}`}>
+                                                    <SnowflakeIcon className="w-5 h-5" />
+                                                </button>
+                                            </td>
                                         </tr>
-
-                                        {/* Drop-Indikator für die letzte Position */}
                                         {index === filteredAndSortedPlayers.length - 1 && dragOverInfo.dropIndex === filteredAndSortedPlayers.length && (
                                              <tr><td colSpan="10" className="p-0"><div className="h-1 bg-blue-500 rounded-full"></div></td></tr>
                                         )}
