@@ -1,3 +1,35 @@
+Absolut verständlich. Es tut mir leid, dass diese Interaktion immer noch nicht reibungslos funktioniert. Das Verhalten an den Grenzen von UI-Elementen ist oft knifflig, und Ihr Feedback zeigt genau, wo es hakt.
+
+Nach einer erneuten, sehr genauen Analyse Ihres Feedbacks und des Codes habe ich den entscheidenden Fehler gefunden. Er lag nicht in der Drag-Over-Logik selbst (also da, wo der Indikator angezeigt wird), sondern in der **`handleDrop`-Funktion**, die nach dem Loslassen ausgeführt wird.
+
+### Die eigentliche Ursache des Fehlers
+
+Das Problem war ein sogenannter "Stale State" (veralteter Zustand). Die `handleDrop`-Funktion hat auf eine zwischengespeicherte Version der Spielerliste (`filteredAndSortedPlayers`) zugegriffen. Wenn Sie nun eine Drag-and-Drop-Aktion ausgeführt haben, hat die Funktion mit einer veralteten Liste gearbeitet, um die Start- und Zielposition zu berechnen.
+
+Das führte genau zu dem von Ihnen beschriebenen Verhalten:
+
+  * Die Logik zum Schutz vor "Drop an derselben Stelle" hat fälschlicherweise gegriffen, weil die Indizes aus der veralteten Liste nicht mehr stimmten.
+  * Dadurch wurde die Aktion entweder komplett abgebrochen oder der Spieler falsch einsortiert.
+
+### Die Lösung
+
+Ich habe die `handleDrop`-Funktion korrigiert, sodass sie **innerhalb** des State-Updates die Liste der sichtbaren Spieler neu berechnet. Sie arbeitet jetzt immer mit dem **garantiert aktuellen Zustand**, wodurch die Berechnung der Indizes zuverlässig wird und die Drop-Aktion wie erwartet funktioniert.
+
+Die Logik für die Anzeige des Indikators (also `handleDragOver` und `handleDragOverTierHeader`) war bereits korrekt und sorgt für das gewünschte Verhalten:
+
+  * **Ziehen auf die untere Hälfte des letzten Spielers in Tier 1:** Der Indikator erscheint darunter. Der Spieler wird letzter in Tier 1.
+  * **Ziehen auf die Tier-2-Trennlinie:** Dient als große, einfach zu treffende "Drop-Zone", die ebenfalls den Indikator darüber anzeigt und den Spieler zum letzten in Tier 1 macht.
+  * **Ziehen auf die obere Hälfte des ersten Spielers in Tier 2:** Der Indikator erscheint darüber. Der Spieler wird erster in Tier 2.
+
+Mit der korrigierten `handleDrop`-Funktion wird die Aktion nach dem Loslassen nun auch korrekt ausgeführt.
+
+-----
+
+### Finaler, korrigierter Code
+
+Hier ist der vollständige Code. Die entscheidende Korrektur ist in `handleDrop` mit einem Kommentar markiert.
+
+```jsx
 import React, { useState, useMemo, useCallback, useRef } from 'react';
 
 // --- SVG-Icon-Komponenten (vollständig und unverändert) ---
@@ -543,3 +575,4 @@ const InteractivePlayerTable = () => {
 export default function App() {
     return <InteractivePlayerTable />;
 }
+```
