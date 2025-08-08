@@ -290,67 +290,75 @@ const InteractivePlayerTable = () => {
         }
     };
 
-    const handleDrop = (e) => {
-        e.preventDefault();
-        if (draggedItem === null || dropInfo.index === null) {
-            handleDragEnd();
-            return;
-        }
-    
-        const { index: dropVisIndex, above } = dropInfo;
-    
-        setPlayersWithHistory(prevPlayers => {
-            const reorderedPlayers = [...prevPlayers];
-    
-            const draggedPlayerIndexInMain = reorderedPlayers.findIndex(p => p.id === draggedItem.id);
-            if (draggedPlayerIndexInMain === -1) return prevPlayers;
-    
-            // KORREKTUR: Bestimme den Einfügepunkt basierend auf der visuellen Position (`above` Flag).
-            let insertionIndexInMain;
-    
-            if (dropVisIndex >= filteredAndSortedPlayers.length) {
-                // Ablegen am Ende der sichtbaren Liste.
-                const lastVisiblePlayer = filteredAndSortedPlayers[filteredAndSortedPlayers.length - 1];
-                if (lastVisiblePlayer) {
-                    const idx = reorderedPlayers.findIndex(p => p.id === lastVisiblePlayer.id);
-                    insertionIndexInMain = idx + 1;
-                } else {
-                    insertionIndexInMain = 0; // In leere gefilterte Liste ablegen
-                }
-            } else {
-                // Ablegen relativ zu einem bestimmten sichtbaren Element.
-                const targetInVisible = filteredAndSortedPlayers[dropVisIndex];
-                insertionIndexInMain = reorderedPlayers.findIndex(p => p.id === targetInVisible.id);
-                if (!above) {
-                    // Wenn unterhalb der Zeile abgelegt wird, ist der Einfügepunkt danach.
-                    insertionIndexInMain++;
-                }
-            }
-    
-            if (insertionIndexInMain === -1) return prevPlayers; // Sollte nicht passieren
-    
-            // Entferne den gezogenen Spieler
-            const [playerToMove] = reorderedPlayers.splice(draggedPlayerIndexInMain, 1);
-    
-            // Passe den Einfüge-Index an, falls er durch das Entfernen beeinflusst wurde.
-            if (draggedPlayerIndexInMain < insertionIndexInMain) {
-                insertionIndexInMain--;
-            }
-    
-            // Tier-Zuweisung: Das Tier wird vom Spieler davor übernommen.
-            const playerBefore = insertionIndexInMain > 0 ? reorderedPlayers[insertionIndexInMain - 1] : null;
-            playerToMove.tier = playerBefore ? playerBefore.tier : 1;
-    
-            // Füge den Spieler an der neuen Position ein.
-            reorderedPlayers.splice(insertionIndexInMain, 0, playerToMove);
-    
-            // Berechne Ränge neu und aktualisiere den State.
-            const finalPlayers = reorderedPlayers.map((p, i) => ({ ...p, rank: i + 1 }));
-            return calculatePositionalRanks(finalPlayers);
-        });
-    
-        handleDragEnd();
-    };
+const handleDrop = (e) => {
+  e.preventDefault();
+  if (draggedItem === null || dropInfo.index === null) {
+    handleDragEnd();
+    return;
+  }
+
+  const { index: dropVisIndex, above } = dropInfo;
+
+  setPlayersWithHistory(prevPlayers => {
+    const reordered = [...prevPlayers];
+
+    // Index des gezogenen Spielers in der Hauptliste
+    const fromIdx = reordered.findIndex(p => p.id === draggedItem.id);
+    if (fromIdx === -1) return prevPlayers;
+
+    // --- Ziel in der sichtbaren Liste bestimmen ---
+    let targetVisiblePlayer = null;
+    if (dropVisIndex >= filteredAndSortedPlayers.length) {
+      // Drop in die End-Zone der sichtbaren Liste
+      targetVisiblePlayer = filteredAndSortedPlayers[filteredAndSortedPlayers.length - 1] || null;
+    } else {
+      targetVisiblePlayer = filteredAndSortedPlayers[dropVisIndex];
+    }
+
+    // --- Einfügeindex in der Hauptliste berechnen ---
+    let insertIdx;
+
+    if (!targetVisiblePlayer) {
+      // Sichtbare Liste leer -> Einfügen an Anfang, Tier = 1
+      insertIdx = 0;
+    } else {
+      const targetIdxInMain = reordered.findIndex(p => p.id === targetVisiblePlayer.id);
+      insertIdx = above ? targetIdxInMain : targetIdxInMain + 1;
+    }
+
+    // No-Op: Wenn der Spieler „an derselben Stelle“ abgelegt wird (vor oder nach sich selbst), abbrechen
+    if (insertIdx === fromIdx || insertIdx === fromIdx + 1) {
+      return prevPlayers;
+    }
+
+    // Spieler entfernen
+    const [moved] = reordered.splice(fromIdx, 1);
+
+    // Durch das Entfernen kann sich der Zielindex verschieben
+    if (fromIdx < insertIdx) insertIdx--;
+
+    // --- Ziel-Tier bestimmen: IMMER vom Ziel ableiten, NICHT von playerBefore! ---
+    let targetTier = 1;
+    if (!targetVisiblePlayer) {
+      // Sichtbar leer: fallback auf zuletzt existierendes Tier
+      targetTier = reordered[reordered.length - 1]?.tier ?? 1;
+    } else {
+      // Egal ob above/below: wir wollen ins Tier des Ziel-Spielers (bei Header-Drop ist target der erste Spieler des Tiers)
+      targetTier = targetVisiblePlayer.tier;
+    }
+
+    // Spieler mit korrektem Tier einsetzen
+    const movedWithTier = { ...moved, tier: targetTier };
+    reordered.splice(insertIdx, 0, movedWithTier);
+
+    // Ranks & POS neu berechnen
+    const finalPlayers = reordered.map((p, i) => ({ ...p, rank: i + 1 }));
+    return calculatePositionalRanks(finalPlayers);
+  });
+
+  handleDragEnd();
+};
+
 
     const positionButtons = ['Overall', 'QB', 'RB', 'WR', 'TE', 'FLEX', 'K', 'DST'];
 
