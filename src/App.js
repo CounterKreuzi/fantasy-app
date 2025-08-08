@@ -58,12 +58,17 @@ const RedoIcon = (props) => (
 );
 
 // Hilfskomponente für den visuellen Drop-Indikator
-const DropIndicator = ({ index, isHeader, above, setDropInfo }) => (
-    <tr onDragOver={(e) => { e.preventDefault(); setDropInfo({ index, above, isHeader }); }}>
+const DropZone = ({ tier, where }) => (
+    <tr onDrop={(e) => handleDropAtBoundary(e, tier, where)} onDragOver={(e) => e.preventDefault()}>
         <td colSpan="10" className="p-0">
             <div className="h-1.5 bg-blue-500 rounded-full mx-2 my-1"></div>
         </td>
     </tr>
+);
+
+// Keep a passive indicator for non-header gaps if needed
+const DropIndicator = () => (
+    <tr><td colSpan="10" className="p-0"><div className="h-1.5 bg-blue-500 rounded-full mx-2 my-1"></div></td></tr>
 );
 
 
@@ -375,6 +380,77 @@ const handleDragOver = (e, index, isHeader = false) => {
         handleDragEnd();
     };
 
+    const handleDropAtBoundary = (e, tier, where) => {
+        e.preventDefault();
+        if (!draggedItem) return;
+
+        setPlayersWithHistory(prevPlayers => {
+            const cloned = [...prevPlayers];
+
+            // Remove moved player
+            const fromIdx = cloned.findIndex(p => p.id === draggedItem.id);
+            if (fromIdx === -1) return prevPlayers;
+            const [moved] = cloned.splice(fromIdx, 1);
+
+            const getOrder = (p) => p ? (p.order ?? p.rank) : null;
+
+            let targetTier = moved.tier;
+            let newOrder;
+
+            if (where === 'above') {
+                // last of previous tier relative to 'tier'
+                const prevTierNum = Math.max(1, tier - 1);
+                targetTier = prevTierNum;
+
+                const lastPrev = cloned
+                  .filter(p => p.tier === prevTierNum)
+                  .sort((a,b) => (a.order ?? a.rank) - (b.order ?? b.rank))
+                  .slice(-1)[0];
+
+                if (lastPrev) {
+                    newOrder = (getOrder(lastPrev) ?? 0) + 0.5;
+                } else {
+                    // if previous tier has no players (edge case), place before first of 'tier'
+                    const firstCurr = cloned
+                      .filter(p => p.tier === tier)
+                      .sort((a,b) => (a.order ?? a.rank) - (b.order ?? b.rank))[0];
+                    newOrder = (getOrder(firstCurr) ?? 1) - 0.5;
+                    targetTier = tier;
+                }
+            } else if (where === 'below') {
+                // first of this tier
+                targetTier = tier;
+                const firstCurr = cloned
+                  .filter(p => p.tier === tier)
+                  .sort((a,b) => (a.order ?? a.rank) - (b.order ?? b.rank))[0];
+                if (firstCurr) {
+                    newOrder = (getOrder(firstCurr) ?? 1) - 0.5;
+                } else {
+                    // no one in current tier: put after last of previous
+                    const lastPrev = cloned
+                      .filter(p => p.tier === tier - 1)
+                      .sort((a,b) => (a.order ?? a.rank) - (b.order ?? b.rank))
+                      .slice(-1)[0];
+                    newOrder = ((getOrder(lastPrev) ?? 0) + 0.5);
+                }
+            } else {
+                return prevPlayers;
+            }
+
+            const updatedMoved = { ...moved, order: newOrder, tier: targetTier };
+            cloned.push(updatedMoved);
+
+            const normalized = cloned
+              .sort((a,b) => (a.order ?? a.rank) - (b.order ?? b.rank))
+              .map((p, i) => ({ ...p, rank: i + 1, order: i + 1 }));
+
+            return calculatePositionalRanks(normalized);
+        });
+
+        handleDragEnd();
+    };
+
+
 
 
 
@@ -461,18 +537,19 @@ const handleDragOver = (e, index, isHeader = false) => {
                                     <React.Fragment key={player.id}>
                                         {showTierHeader && (
                                             <>
-                                            {index !== 0 && dropInfo.index === index && dropInfo.above && <DropIndicator index={index} isHeader={true} above={true} setDropInfo={setDropInfo} />}
+                                            {index !== 0 && dropInfo.index === index && dropInfo.above && <DropZone tier={player.tier} where="above" />}
                                             <tr className="bg-blue-800/50 text-white"
                                                 onDragOver={(e) => handleDragOver(e, index, true)}>
                                                 <td colSpan="10" className="px-4 py-1 text-sm font-bold tracking-wider">
                                                     Tier {player.tier}
                                                 </td>
+                                            {dropInfo.index === index && !dropInfo.above && <DropZone tier={player.tier} where="below" />}
                                             </tr>
                                             {dropInfo.index === index && !dropInfo.above && <DropIndicator />}
                                             </>
                                         )}
                                         
-                                        {!showTierHeader && dropInfo.index === index && dropInfo.above && <DropIndicator index={index} isHeader={false} above={true} setDropInfo={setDropInfo} />}
+                                        {!showTierHeader && dropInfo.index === index && dropInfo.above && <DropIndicator />}
 
                                         <tr className={`border-b border-gray-700 hover:bg-gray-700/50 transition-colors duration-150 cursor-grab active:cursor-grabbing ${draggedItem?.id === player.id ? 'opacity-40' : ''} ${player.unavailable ? 'opacity-50 bg-gray-800/60' : ''}`}
                                             draggable 
@@ -528,7 +605,7 @@ const handleDragOver = (e, index, isHeader = false) => {
                                                 </button>
                                             </td>
                                         </tr>
-                                        {!showTierHeader && dropInfo.index === index && !dropInfo.above && <DropIndicator index={index} isHeader={false} above={false} setDropInfo={setDropInfo} />}
+                                        {!showTierHeader && dropInfo.index === index && !dropInfo.above && <DropIndicator />}
                                     </React.Fragment>
                                 );
                             }) : (
@@ -541,7 +618,7 @@ const handleDragOver = (e, index, isHeader = false) => {
                              {/* Drop-Zone am Ende der Liste */}
                              <tr onDragOver={(e) => handleDragOver(e, filteredAndSortedPlayers.length, false)}>
                                 <td colSpan={10} className="p-4 h-full"> 
-                                    {dropInfo.index === filteredAndSortedPlayers.length && <DropIndicator index={filteredAndSortedPlayers.length} isHeader={false} above={false} setDropInfo={setDropInfo} />}
+                                    {dropInfo.index === filteredAndSortedPlayers.length && <DropIndicator />}
                                 </td>
                              </tr>
                         </tbody>
