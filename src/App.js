@@ -58,8 +58,8 @@ const RedoIcon = (props) => (
 );
 
 // Hilfskomponente für den visuellen Drop-Indikator
-const DropZone = ({ tier, where }) => (
-    <tr onDrop={(e) => handleDropAtBoundary(e, tier, where)} onDragOver={(e) => e.preventDefault()}>
+const DropZone = ({ onDrop }) => (
+    <tr onDrop={onDrop} onDragOver={(e) => e.preventDefault()}>
         <td colSpan="10" className="p-0">
             <div className="h-1.5 bg-blue-500 rounded-full mx-2 my-1"></div>
         </td>
@@ -537,13 +537,13 @@ const handleDragOver = (e, index, isHeader = false) => {
                                     <React.Fragment key={player.id}>
                                         {showTierHeader && (
                                             <>
-                                            {index !== 0 && dropInfo.index === index && dropInfo.above && <DropZone tier={player.tier} where="above" />}
+                                            {index !== 0 && dropInfo.index === index && dropInfo.above && <DropZone onDrop={(e) => handleDropAtBoundary(e, player.tier, "above")} />}
                                             <tr className="bg-blue-800/50 text-white"
                                                 onDragOver={(e) => handleDragOver(e, index, true)}>
                                                 <td colSpan="10" className="px-4 py-1 text-sm font-bold tracking-wider">
                                                     Tier {player.tier}
                                                 </td>
-                                            {dropInfo.index === index && !dropInfo.above && <DropZone tier={player.tier} where="below" />}
+                                            {dropInfo.index === index && !dropInfo.above && <DropZone onDrop={(e) => handleDropAtBoundary(e, player.tier, "below")} />}
                                             </tr>
                                             {dropInfo.index === index && !dropInfo.above && <DropIndicator />}
                                             </>
