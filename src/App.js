@@ -305,7 +305,7 @@ const handleDragOver = (e, index, isHeader = false) => {
         hoverTimer.current = setTimeout(() => {
             setDropInfo({ index, above: isAbove, isHeader });
             lastCommittedKey.current = key;
-        }, 90); // 90ms Hover-Intent -> deutlich weniger Flackern
+        }, 90);
     };
 
 
