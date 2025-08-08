@@ -285,9 +285,9 @@ const InteractivePlayerTable = () => {
     };
 
     const handleDragEnd = () => {
-        if (hoverTimer.current) { clearTimeout(hoverTimer.current); hoverTimer.current = null; }
-        lastCommittedKey.current = null;
         setDraggedItem(null);
+        if (hoverTimer && hoverTimer.current) { clearTimeout(hoverTimer.current); hoverTimer.current = null; }
+        if (lastCommittedKey) lastCommittedKey.current = null;
         setDropInfo({ index: null, above: false, isHeader: false });
     };
 
@@ -308,6 +308,400 @@ const handleDragOver = (e, index, isHeader = false) => {
         }, 90);
     };
 
+    // Explicit drop handlers for anchor rows
+    const handleDropAtBoundary = (e, visIndex, where /* 'above'|'below' */) => {
+        e.preventDefault();
+        if (!draggedItem) return;
+
+        setPlayersWithHistory(prevPlayers => {
+            // Recompute visible list from prevPlayers to avoid stale closures
+            let playersToFilter = [...prevPlayers];
+            if (activePositionFilter !== 'Overall' && activePositionFilter) {
+                const positionMap = {
+                    'QB': 'QB', 'RB': 'RB', 'WR': 'WR', 'TE': 'TE', 'K': 'K', 'DST': 'DST', 'FLEX': 'FLEX'
+                };
+                const basePos = positionMap[activePositionFilter];
+                playersToFilter = playersToFilter.filter(p => {
+                    if (activePositionFilter === 'FLEX') return ['RB','WR','TE'].includes(p.basePos);
+                    return p.basePos === basePos;
+                });
+            }
+            if (statusFilters.favorite) playersToFilter = playersToFilter.filter(p => p.isFavorite);
+            if (statusFilters.hot) playersToFilter = playersToFilter.filter(p => p.isHot);
+            if (statusFilters.cold) playersToFilter = playersToFilter.filter(p => p.isCold);
+            playersToFilter = playersToFilter.filter(player => {
+                if (teamFilter && player.team !== teamFilter) return false;
+                if (searchQuery && !player.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+                return true;
+            });
+            const visible = playersToFilter.sort((a,b) => (a.order ?? a.rank) - (b.order ?? b.rank));
+
+            const cloned = [...prevPlayers];
+            const fromIdx = cloned.findIndex(p => p.id === draggedItem.id);
+            if (fromIdx === -1) return prevPlayers;
+            const [moved] = cloned.splice(fromIdx, 1);
+
+            const getOrder = (p) => p ? (p.order ?? p.rank) : null;
+            const between = (a, b) => {
+                const ao = getOrder(a) ?? ((getOrder(b) ?? 1) - 1);
+                const bo = getOrder(b) ?? (ao + 2);
+                return (ao + bo) / 2;
+            };
+
+            const left = visible[visIndex - 1] ?? null;
+            const right = visible[visIndex] ?? null;
+
+            let newOrder = between(left, right);
+            let newTier;
+            if (where === 'above') {
+                newTier = left ? left.tier : Math.max(1, (right?.tier ?? (moved.tier)) - 1);
+            } else {
+                newTier = right ? right.tier : (left?.tier ?? moved.tier);
+            }
+
+            const updatedMoved = { ...moved, order: newOrder, tier: newTier };
+            cloned.push(updatedMoved);
+
+            const normalized = cloned
+                .sort((a,b) => (a.order ?? a.rank) - (b.order ?? b.rank))
+                .map((p, i) => ({ ...p, rank: i + 1, order: i + 1 }));
+
+            return calculatePositionalRanks(normalized);
+        });
+
+        handleDragEnd();
+    };
+
+    const handleDropAtRow = (e, visIndex, where /* 'before'|'after' */) => {
+        e.preventDefault();
+        if (!draggedItem) return;
+
+        setPlayersWithHistory(prevPlayers => {
+            // Build visible from prevPlayers
+            let playersToFilter = [...prevPlayers];
+            if (activePositionFilter !== 'Overall' && activePositionFilter) {
+                const positionMap = {
+                    'QB': 'QB', 'RB': 'RB', 'WR': 'WR', 'TE': 'TE', 'K': 'K', 'DST': 'DST', 'FLEX': 'FLEX'
+                };
+                const basePos = positionMap[activePositionFilter];
+                playersToFilter = playersToFilter.filter(p => {
+                    if (activePositionFilter === 'FLEX') return ['RB','WR','TE'].includes(p.basePos);
+                    return p.basePos === basePos;
+                });
+            }
+            if (statusFilters.favorite) playersToFilter = playersToFilter.filter(p => p.isFavorite);
+            if (statusFilters.hot) playersToFilter = playersToFilter.filter(p => p.isHot);
+            if (statusFilters.cold) playersToFilter = playersToFilter.filter(p => p.isCold);
+            playersToFilter = playersToFilter.filter(player => {
+                if (teamFilter && player.team !== teamFilter) return false;
+                if (searchQuery && !player.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+                return true;
+            });
+            const visible = playersToFilter.sort((a,b) => (a.order ?? a.rank) - (b.order ?? b.rank));
+
+            const cloned = [...prevPlayers];
+            const fromIdx = cloned.findIndex(p => p.id === draggedItem.id);
+            if (fromIdx === -1) return prevPlayers;
+            const [moved] = cloned.splice(fromIdx, 1);
+
+            const getOrder = (p) => p ? (p.order ?? p.rank) : null;
+            const between = (a, b) => {
+                const ao = getOrder(a) ?? ((getOrder(b) ?? 1) - 1);
+                const bo = getOrder(b) ?? (ao + 2);
+                return (ao + bo) / 2;
+            };
+
+            let left, right;
+            if (where === 'before') {
+                left = visible[visIndex - 1] ?? null;
+                right = visible[visIndex] ?? null;
+            } else {
+                left = visible[visIndex] ?? null;
+                right = visible[visIndex + 1] ?? null;
+            }
+
+            let newOrder;
+            if (!left && right) newOrder = getOrder(right) - 1;
+            else if (left && !right) newOrder = getOrder(left) + 1;
+            else newOrder = between(left, right);
+
+            let newTier;
+            if (left && right) {
+                newTier = (left.tier === right.tier) ? left.tier : (where === 'before' ? left.tier : right.tier);
+            } else if (left) newTier = left.tier;
+            else if (right) newTier = right.tier;
+            else newTier = moved.tier;
+
+            const updatedMoved = { ...moved, order: newOrder, tier: newTier };
+            cloned.push(updatedMoved);
+
+            const normalized = cloned
+                .sort((a,b) => (a.order ?? a.rank) - (b.order ?? b.rank))
+                .map((p, i) => ({ ...p, rank: i + 1, order: i + 1 }));
+
+            return calculatePositionalRanks(normalized);
+        });
+
+        handleDragEnd();
+    };
+
+    const handleDrop = (e) => {
+        e.preventDefault();
+        if (draggedItem === null || dropInfo.index === null) {
+            handleDragEnd();
+            return;
+        }
+
+        const { index: visIndex, above, isHeader } = dropInfo;
+
+        setPlayersWithHistory(prevPlayers => {
+            const visible = filteredAndSortedPlayers; // already sorted by order
+            const cloned = [...prevPlayers];
+
+            const prevVis = visible[visIndex - 1] ?? null;
+            const targetVis = visible[visIndex] ?? null;
+            const nextVis  = visible[visIndex + 1] ?? null;
+
+            const fromIdx = cloned.findIndex(p => p.id === draggedItem.id);
+            if (fromIdx === -1) return prevPlayers;
+
+            const [moved] = cloned.splice(fromIdx, 1);
+
+            const getOrder = (p) => p ? (p.order ?? p.rank) : null;
+            const between = (a, b) => {
+                const ao = getOrder(a) ?? (getOrder(b) ?? 0) - 1;
+                const bo = getOrder(b) ?? (getOrder(a) ?? 0) + 1;
+                return (ao + bo) / 2;
+            };
+
+            let newOrder = getOrder(moved);
+            let newTier = moved.tier;
+
+            if (isHeader) {
+                // Hovering the "Tier X" header boundary
+                const boundary = between(prevVis, targetVis);
+                if (above) {
+                    newOrder = boundary - 0.2;
+                    newTier = prevVis ? prevVis.tier : (targetVis ? Math.max(1, targetVis.tier - 1) : moved.tier);
+                } else {
+                    newOrder = boundary + 0.2;
+                    newTier = targetVis ? targetVis.tier : moved.tier;
+                }
+            } else {
+                // Hovering a player row
+                if (!targetVis) {
+                    const last = visible[visible.length - 1];
+                    newOrder = (getOrder(last) ?? 0) + 1;
+                    newTier  = last?.tier ?? moved.tier;
+                } else if (above) {
+                    if (prevVis) {
+                        newOrder = between(prevVis, targetVis);
+                        newTier = (prevVis.tier === targetVis.tier) ? targetVis.tier : prevVis.tier;
+                    } else {
+                        newOrder = getOrder(targetVis) - 1;
+                        newTier = targetVis.tier;
+                    }
+                } else {
+                    if (nextVis) {
+                        newOrder = between(targetVis, nextVis);
+                        newTier = (targetVis.tier === nextVis.tier) ? targetVis.tier : nextVis.tier;
+                    } else {
+                        newOrder = getOrder(targetVis) + 1;
+                        newTier = targetVis.tier;
+                    }
+                }
+            }
+
+            const updatedMoved = { ...moved, order: newOrder, tier: newTier };
+            cloned.push(updatedMoved);
+
+            const normalized = cloned
+              .sort((a,b) => (a.order ?? a.rank) - (b.order ?? b.rank))
+              .map((p, i) => ({ ...p, rank: i + 1, order: i + 1 }));
+
+            return calculatePositionalRanks(normalized);
+        });
+
+        handleDragEnd();
+    };
+
+
+
+
+    const positionButtons = ['Overall', 'QB', 'RB', 'WR', 'TE', 'FLEX', 'K', 'DST'];
+
+    return (
+        <div className="max-w-7xl mx-auto p-2 sm:p-4 bg-gray-900 text-gray-200 min-h-screen font-sans">
+            <div className="bg-gray-800 rounded-lg shadow-2xl flex flex-col h-[calc(100vh-2rem)]">
+                <div className="flex-shrink-0">
+                    {/* Header und Filter (unverändert) */}
+                    <div className="p-4 bg-gray-700/50 border-b border-gray-700 flex flex-wrap items-center justify-between gap-4">
+                        <div className="flex flex-wrap items-center gap-4">
+                            <label htmlFor="csv-upload" className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 transition">
+                                <UploadCloudIcon className="w-5 h-5" /> CSV importieren
+                            </label>
+                            <input id="csv-upload" type="file" accept=".csv" onChange={handleFileUpload} className="hidden" />
+                            <button onClick={exportToCSV} disabled={players.length === 0} className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white font-semibold rounded-md hover:bg-green-700 transition disabled:bg-gray-600 disabled:cursor-not-allowed">
+                                <DownloadIcon className="w-5 h-5" /> CSV exportieren
+                            </button>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button onClick={undo} disabled={historyIndex <= 0} className="p-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 transition disabled:bg-gray-700 disabled:cursor-not-allowed" title="Rückgängig machen">
+                                <UndoIcon className="w-5 h-5" />
+                            </button>
+                            <button onClick={redo} disabled={historyIndex >= history.length - 1} className="p-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 transition disabled:bg-gray-700 disabled:cursor-not-allowed" title="Wiederholen">
+                                <RedoIcon className="w-5 h-5" />
+                            </button>
+                        </div>
+                    </div>
+                    <div className="p-3 border-b border-gray-700 flex flex-wrap items-center justify-between gap-y-4">
+                        <div className="flex flex-wrap items-center gap-x-6 gap-y-4">
+                            <button onClick={() => handleStatusFilterToggle('available')} title="Nur verfügbare Spieler" className={`p-2 rounded-md transition-colors ${statusFilters.available ? 'bg-green-600 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}>
+                                <CheckSquareIcon className="w-5 h-5" />
+                            </button>
+                            <div className="flex flex-wrap items-center gap-1 sm:gap-2">
+                                {positionButtons.map(pos => (
+                                <button key={pos} onClick={() => setActivePositionFilter(pos)} className={`px-3 py-1.5 text-sm sm:text-base font-semibold rounded-md transition-all duration-200 ${activePositionFilter === pos ? 'bg-blue-600 text-white shadow-md' : 'text-gray-300 hover:text-white hover:bg-gray-600'}`}>
+                                    {pos}
+                                </button>
+                                ))}
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <label htmlFor="team-filter" className="text-sm font-medium text-gray-400">Team:</label>
+                                <select id="team-filter" value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} className="px-3 py-1.5 border border-gray-600 rounded-md bg-gray-700 text-white hover:bg-gray-600 transition focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    <option value="">Alle</option>
+                                    {uniqueTeams.map(team => (<option key={team} value={team}>{team}</option>))}
+                                </select>
+                            </div>
+                            <div className="relative flex items-center">
+                                <SearchIcon className="w-4 h-4 text-gray-400 absolute left-3 pointer-events-none" />
+                                <input id="search-filter" type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Suchen..." className="w-40 bg-gray-700 border border-gray-600 rounded-md py-1.5 pl-9 pr-8 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"/>
+                                {searchQuery && (<button onClick={() => setSearchQuery('')} className="absolute right-2 text-gray-400 hover:text-white" aria-label="Suche zurücksetzen"><X className="w-4 h-4" /></button>)}
+                            </div>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <button onClick={() => handleStatusFilterToggle('favorite')} title="Favoriten" className={`p-2 rounded-md transition-colors ${statusFilters.favorite ? 'bg-yellow-500 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}><StarIcon className="w-5 h-5" /></button>
+                            <button onClick={() => handleStatusFilterToggle('hot')} title="Hot" className={`p-2 rounded-md transition-colors ${statusFilters.hot ? 'bg-red-600 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}><FireIcon className="w-5 h-5" /></button>
+                            <button onClick={() => handleStatusFilterToggle('cold')} title="Cold" className={`p-2 rounded-md transition-colors ${statusFilters.cold ? 'bg-blue-500 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}><SnowflakeIcon className="w-5 h-5" /></button>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="flex-grow overflow-y-auto relative">
+                    <table className="w-full min-w-[900px] border-separate border-spacing-0">
+                        <thead className="bg-gray-800">
+                            <tr className="sticky top-0 bg-gray-800 z-10 border-b-2 border-gray-600">
+                                <th className="p-3 text-center w-12 font-semibold">✓</th>
+                                <th className="p-3 text-left font-semibold">RK</th>
+                                <th className="p-3 text-left font-semibold">PLAYER NAME</th>
+                                <th className="p-3 text-left font-semibold">TEAM</th>
+                                <th className="p-3 text-left font-semibold">POS</th>
+                                <th className="p-3 text-center font-semibold">BYE</th>
+                                <th className="p-3 text-left min-w-[200px] font-semibold">NOTIZEN</th>
+                                <th className="p-3 text-center w-12 font-semibold"><StarIcon className="w-4 h-4 mx-auto" /></th>
+                                <th className="p-3 text-center w-12 font-semibold"><FireIcon className="w-4 h-4 mx-auto" /></th>
+                                <th className="p-3 text-center w-12 font-semibold"><SnowflakeIcon className="w-4 h-4 mx-auto" /></th>
+                            </tr>
+                        </thead>
+                        <tbody onDrop={handleDrop} onDragOver={(e) => e.preventDefault()}>
+                            {filteredAndSortedPlayers.length > 0 ? filteredAndSortedPlayers.map((player, index) => {
+                                const showTierHeader = index === 0 || player.tier !== filteredAndSortedPlayers[index - 1]?.tier;
+                                
+                                return (
+                                    <React.Fragment key={player.id}>
+                                        {showTierHeader && (
+                                            <>
+                                            {index !== 0 && dropInfo.index === index && dropInfo.above && <DropAnchorRow onDrop={(e) => handleDropAtBoundary(e, index, 'above')} />}
+                                            <tr className="bg-blue-800/50 text-white"
+                                                onDragOver={(e) => handleDragOver(e, index, true)}>
+                                                <td colSpan="10" className="px-4 py-1 text-sm font-bold tracking-wider">
+                                                    Tier {player.tier}
+                                            {dropInfo.index === index && !dropInfo.above && <DropAnchorRow onDrop={(e) => handleDropAtBoundary(e, index, 'below')} />}
+                                                </td>
+                                            </tr>
+                                            {dropInfo.index === index && !dropInfo.above && <DropIndicator />}
+                                            </>
+                                        )}
+                                        
+                                        {!showTierHeader && dropInfo.index === index && dropInfo.above && <DropAnchorRow onDrop={(e) => handleDropAtRow(e, index, 'before')} />}
+
+                                        <tr className={`border-b border-gray-700 hover:bg-gray-700/50 transition-colors duration-150 cursor-grab active:cursor-grabbing ${draggedItem?.id === player.id ? 'opacity-40' : ''} ${player.unavailable ? 'opacity-50 bg-gray-800/60' : ''}`}
+                                            draggable 
+                                            onDragStart={(e) => handleDragStart(e, player)} 
+                                            onDragEnd={handleDragEnd}
+                                            onDragOver={(e) => handleDragOver(e, index, false)}>
+                                            
+                                            <td className="p-3 text-center">
+                                                <input type="checkbox" checked={player.unavailable} onChange={() => toggleAvailability(player.id)} className="w-4 h-4 cursor-pointer bg-gray-600 border-gray-500 rounded text-blue-500 focus:ring-blue-500"/>
+                                            </td>
+                                            <td className={`p-3 text-center ${player.unavailable ? 'line-through text-gray-500' : ''}`}>
+                                                {editingCell === `${player.id}-rank` ? (
+                                                <input type="number" defaultValue={player.rank} onBlur={(e) => handleCellEdit(player.id, 'rank', e.target.value)} onKeyPress={(e) => e.key === 'Enter' && e.target.blur()} className="px-2 py-1 border border-gray-600 rounded bg-gray-900 w-16 text-center" autoFocus/>
+                                                ) : (
+                                                <span className="cursor-pointer hover:bg-gray-600/50 px-2 py-1 rounded inline-flex items-center gap-1 group" onClick={() => setEditingCell(`${player.id}-rank`)}>
+                                                    {player.rank}
+                                                    <Edit2 className="w-3 h-3 text-gray-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                </span>
+                                                )}
+                                            </td>
+                                            <td className={`p-3 group ${player.unavailable ? 'line-through text-gray-500' : ''}`}>
+                                                <span className="font-medium text-gray-100">{player.name}</span>
+                                            </td>
+                                            <td className={`p-3 ${player.unavailable ? 'line-through text-gray-500' : ''}`}>
+                                                <span className="font-semibold text-gray-400">{player.team}</span>
+                                            </td>
+                                            <td className={`p-3 ${player.unavailable ? 'line-through text-gray-500' : 'text-gray-300'}`}>{player.pos}</td>
+                                            <td className={`p-3 text-center ${player.unavailable ? 'line-through text-gray-500' : ''}`}>
+                                                <span className="font-medium">{player.byeWeek}</span>
+                                            </td>
+                                            <td className="p-3">
+                                                {editingCell === `${player.id}-notes` ? (
+                                                <input type="text" defaultValue={player.notes} onBlur={(e) => handleCellEdit(player.id, 'notes', e.target.value)} onKeyPress={(e) => e.key === 'Enter' && e.target.blur()} className="px-2 py-1 border border-gray-600 rounded bg-gray-900 w-full" placeholder="Notiz hinzufügen..." autoFocus/>
+                                                ) : (
+                                                <span className={`cursor-pointer hover:bg-gray-600/50 px-2 py-1 rounded block min-h-[28px] w-full ${player.notes ? 'text-gray-300' : 'text-gray-500'}`} onClick={() => setEditingCell(`${player.id}-notes`)}>
+                                                    {player.notes || '+ Notiz'}
+                                                </span>
+                                                )}
+                                            </td>
+                                            <td className="p-3 text-center">
+                                                <button onClick={() => togglePlayerStatus(player.id, 'isFavorite')} className={`p-1 rounded-full transition-colors ${player.isFavorite ? 'text-yellow-400' : 'text-gray-600 hover:text-yellow-400'}`}>
+                                                    <StarIcon className="w-5 h-5" fill={player.isFavorite ? 'currentColor' : 'none'} />
+                                                </button>
+                                            </td>
+                                            <td className="p-3 text-center">
+                                                <button onClick={() => togglePlayerStatus(player.id, 'isHot')} className={`p-1 rounded-full transition-colors ${player.isHot ? 'text-red-500' : 'text-gray-600 hover:text-red-500'}`}>
+                                                    <FireIcon className="w-5 h-5" />
+                                                </button>
+                                            </td>
+                                            <td className="p-3 text-center">
+                                                <button onClick={() => togglePlayerStatus(player.id, 'isCold')} className={`p-1 rounded-full transition-colors ${player.isCold ? 'text-blue-400' : 'text-gray-600 hover:text-blue-400'}`}>
+                                                    <SnowflakeIcon className="w-5 h-5" />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                        {!showTierHeader && dropInfo.index === index && !dropInfo.above && <DropAnchorRow onDrop={(e) => handleDropAtRow(e, index, 'after')} />}
+                                    </React.Fragment>
+                                );
+                            }) : (
+                                <tr>
+                                    <td colSpan="10" className="text-center p-8 text-gray-500">
+                                        Keine Spieler gefunden. Bitte laden Sie eine CSV-Datei hoch.
+                                    </td>
+                                </tr>
+                            )}
+                             {/* Drop-Zone am Ende der Liste */}
+                             <tr onDragOver={(e) => handleDragOver(e, filteredAndSortedPlayers.length, false)}>
+                                <td colSpan={10} className="p-4 h-full"> 
+                                    {dropInfo.index === filteredAndSortedPlayers.length && <DropAnchorRow onDrop={(e) => handleDropAtRow(e, filteredAndSortedPlayers.length-1, 'after')} />}
+                                </td>
+                             </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 export default function App() {
     return <InteractivePlayerTable />;
