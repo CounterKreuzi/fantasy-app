@@ -600,19 +600,19 @@ const handleDragOver = (e, index, isHeader = false) => {
                                     <React.Fragment key={player.id}>
                                         {showTierHeader && (
                                             <>
-                                            {index !== 0 && <DropAnchorRow onDrop={(e) => handleDropAtBoundary(e, index, 'above')} />}
+                                            {index !== 0 && dropInfo.index === index && dropInfo.above && <DropAnchorRow onDrop={(e) => handleDropAtBoundary(e, index, 'above')} />}
                                             <tr className="bg-blue-800/50 text-white"
                                                 onDragOver={(e) => handleDragOver(e, index, true)}>
                                                 <td colSpan="10" className="px-4 py-1 text-sm font-bold tracking-wider">
                                                     Tier {player.tier}
-                                            <DropAnchorRow onDrop={(e) => handleDropAtBoundary(e, index, 'below')} />
+                                            {dropInfo.index === index && !dropInfo.above && <DropAnchorRow onDrop={(e) => handleDropAtBoundary(e, index, 'below')} />}
                                                 </td>
                                             </tr>
                                             {dropInfo.index === index && !dropInfo.above && <DropIndicator />}
                                             </>
                                         )}
                                         
-                                        <DropAnchorRow onDrop={(e) => handleDropAtRow(e, index, 'before')} />
+                                        {!showTierHeader && dropInfo.index === index && dropInfo.above && <DropAnchorRow onDrop={(e) => handleDropAtRow(e, index, 'before')} />}
 
                                         <tr className={`border-b border-gray-700 hover:bg-gray-700/50 transition-colors duration-150 cursor-grab active:cursor-grabbing ${draggedItem?.id === player.id ? 'opacity-40' : ''} ${player.unavailable ? 'opacity-50 bg-gray-800/60' : ''}`}
                                             draggable 
@@ -668,7 +668,7 @@ const handleDragOver = (e, index, isHeader = false) => {
                                                 </button>
                                             </td>
                                         </tr>
-                                        <DropAnchorRow onDrop={(e) => handleDropAtRow(e, index, 'after')} />
+                                        {!showTierHeader && dropInfo.index === index && !dropInfo.above && <DropAnchorRow onDrop={(e) => handleDropAtRow(e, index, 'after')} />}
                                     </React.Fragment>
                                 );
                             }) : (
@@ -681,7 +681,7 @@ const handleDragOver = (e, index, isHeader = false) => {
                              {/* Drop-Zone am Ende der Liste */}
                              <tr onDragOver={(e) => handleDragOver(e, filteredAndSortedPlayers.length, false)}>
                                 <td colSpan={10} className="p-4 h-full"> 
-                                    <DropAnchorRow onDrop={(e) => handleDropAtRow(e, filteredAndSortedPlayers.length-1, 'after')} />
+                                    {dropInfo.index === filteredAndSortedPlayers.length && <DropAnchorRow onDrop={(e) => handleDropAtRow(e, filteredAndSortedPlayers.length-1, 'after')} />}
                                 </td>
                              </tr>
                         </tbody>
