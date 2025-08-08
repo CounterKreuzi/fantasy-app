@@ -60,25 +60,24 @@ const RedoIcon = (props) => (
 );
 
 /* =========================
-   Drop-Zone: große Hit-Area, halbhohe Visualisierung
+   Drop-Zone (angedockt, große Hit-Area, schmale Optik)
    ========================= */
-// Für besseres Droppen hat die Dropzone eine KLICK-/DROP-Fläche von ~18px,
-// zeigt aber nur einen ~6px hohen Balken. So ist sie „leicht zu treffen“,
-// ohne optisch zu dominant zu sein.
+// Ziel: kein vertikaler Abstand, funktional groß (ca. halbe Spielerzeilenhöhe),
+// optisch schlank. Für Debug weiterhin sichtbar.
 const DropZoneRow = ({
   onDrop,
   onDragOver,
   ariaLabel = 'Drop here',
   active = false,
-  hitHeightPx = 18,     // vergrößerte unsichtbare Trefferfläche
-  visualHeightPx = 6,    // halb so hoch wie vorher (~6px)
+  hitHeightPx = 28,   // ~halbe Spielerzeile (bei ~56px Zeilenhöhe)
+  visualHeightPx = 4, // schmale Optik
 }) => {
   return (
     <tr onDrop={onDrop} onDragOver={onDragOver}>
       <td colSpan="10" className="p-0">
         <div
           style={{ height: `${hitHeightPx}px` }}
-          className="mx-2 my-1 flex items-center"
+          className="m-0 flex items-center"  // angedockt: keine Abstände
           aria-label={ariaLabel}
         >
           <div
@@ -337,7 +336,7 @@ const InteractivePlayerTable = () => {
     return list.sort((a,b) => (a.order ?? a.rank) - (b.order ?? b.rank));
   };
 
-  /* ----- Drop: Tier-Grenze (eine Zone oben & unten; über Tier 1 KEINE) ----- */
+  /* ----- Drop: Tier-Grenze (über Tier 1 KEINE) ----- */
   const handleDropAtBoundary = (e, visIndex, where /* 'above' | 'below' */) => {
     e.preventDefault();
     if (!draggedItem) return;
@@ -578,8 +577,7 @@ const InteractivePlayerTable = () => {
                     <tr
                       className={`border-b border-gray-700 hover:bg-gray-700/50 transition-colors duration-150 cursor-grab active:cursor-grabbing ${draggedItem?.id === player.id ? 'opacity-40' : ''} ${player.unavailable ? 'opacity-50 bg-gray-800/60' : ''}`}
                       draggable
-                     onDragStart={(e) => handleDragStart(e, player)}
-
+                      onDragStart={(e) => handleDragStart(e, player)}
                       onDragEnd={handleDragEnd}
                     >
                       <td className="p-3 text-center">
