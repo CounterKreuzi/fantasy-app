@@ -58,17 +58,14 @@ const RedoIcon = (props) => (
 );
 
 // Hilfskomponente für den visuellen Drop-Indikator
-const DropZone = ({ onDrop }) => (
-    <tr onDrop={onDrop} onDragOver={(e) => e.preventDefault()}>
-        <td colSpan="10" className="p-0">
-            <div className="h-1.5 bg-blue-500 rounded-full mx-2 my-1"></div>
-        </td>
-    </tr>
-);
-
-// Keep a passive indicator for non-header gaps if needed
 const DropIndicator = () => (
     <tr><td colSpan="10" className="p-0"><div className="h-1.5 bg-blue-500 rounded-full mx-2 my-1"></div></td></tr>
+);
+
+const DropAnchorRow = ({ onDrop }) => (
+    <tr onDrop={onDrop} onDragOver={(e) => e.preventDefault()}>
+        <td colSpan="10" className="p-0"><div className="h-1.5 bg-blue-500 rounded-full mx-2 my-1"></div></td>
+    </tr>
 );
 
 
@@ -300,6 +297,143 @@ const handleDragOver = (e, index, isHeader = false) => {
             setDropInfo({ index, above: isAbove, isHeader });
         }
     };
+    // Explicit drop handlers for anchor rows
+    const handleDropAtBoundary = (e, visIndex, where /* 'above'|'below' */) => {
+        e.preventDefault();
+        if (!draggedItem) return;
+
+        setPlayersWithHistory(prevPlayers => {
+            // Recompute visible list from prevPlayers to avoid stale closures
+            let playersToFilter = [...prevPlayers];
+            if (activePositionFilter !== 'Overall' && activePositionFilter) {
+                const positionMap = {
+                    'QB': 'QB', 'RB': 'RB', 'WR': 'WR', 'TE': 'TE', 'K': 'K', 'DST': 'DST', 'FLEX': 'FLEX'
+                };
+                const basePos = positionMap[activePositionFilter];
+                playersToFilter = playersToFilter.filter(p => {
+                    if (activePositionFilter === 'FLEX') return ['RB','WR','TE'].includes(p.basePos);
+                    return p.basePos === basePos;
+                });
+            }
+            if (statusFilters.favorite) playersToFilter = playersToFilter.filter(p => p.isFavorite);
+            if (statusFilters.hot) playersToFilter = playersToFilter.filter(p => p.isHot);
+            if (statusFilters.cold) playersToFilter = playersToFilter.filter(p => p.isCold);
+            playersToFilter = playersToFilter.filter(player => {
+                if (teamFilter && player.team !== teamFilter) return false;
+                if (searchQuery && !player.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+                return true;
+            });
+            const visible = playersToFilter.sort((a,b) => (a.order ?? a.rank) - (b.order ?? b.rank));
+
+            const cloned = [...prevPlayers];
+            const fromIdx = cloned.findIndex(p => p.id === draggedItem.id);
+            if (fromIdx === -1) return prevPlayers;
+            const [moved] = cloned.splice(fromIdx, 1);
+
+            const getOrder = (p) => p ? (p.order ?? p.rank) : null;
+            const between = (a, b) => {
+                const ao = getOrder(a) ?? ((getOrder(b) ?? 1) - 1);
+                const bo = getOrder(b) ?? (ao + 2);
+                return (ao + bo) / 2;
+            };
+
+            const left = visible[visIndex - 1] ?? null;
+            const right = visible[visIndex] ?? null;
+
+            let newOrder = between(left, right);
+            let newTier;
+            if (where === 'above') {
+                newTier = left ? left.tier : Math.max(1, (right?.tier ?? (moved.tier)) - 1);
+            } else {
+                newTier = right ? right.tier : (left?.tier ?? moved.tier);
+            }
+
+            const updatedMoved = { ...moved, order: newOrder, tier: newTier };
+            cloned.push(updatedMoved);
+
+            const normalized = cloned
+                .sort((a,b) => (a.order ?? a.rank) - (b.order ?? b.rank))
+                .map((p, i) => ({ ...p, rank: i + 1, order: i + 1 }));
+
+            return calculatePositionalRanks(normalized);
+        });
+
+        handleDragEnd();
+    };
+
+    const handleDropAtRow = (e, visIndex, where /* 'before'|'after' */) => {
+        e.preventDefault();
+        if (!draggedItem) return;
+
+        setPlayersWithHistory(prevPlayers => {
+            // Build visible from prevPlayers
+            let playersToFilter = [...prevPlayers];
+            if (activePositionFilter !== 'Overall' && activePositionFilter) {
+                const positionMap = {
+                    'QB': 'QB', 'RB': 'RB', 'WR': 'WR', 'TE': 'TE', 'K': 'K', 'DST': 'DST', 'FLEX': 'FLEX'
+                };
+                const basePos = positionMap[activePositionFilter];
+                playersToFilter = playersToFilter.filter(p => {
+                    if (activePositionFilter === 'FLEX') return ['RB','WR','TE'].includes(p.basePos);
+                    return p.basePos === basePos;
+                });
+            }
+            if (statusFilters.favorite) playersToFilter = playersToFilter.filter(p => p.isFavorite);
+            if (statusFilters.hot) playersToFilter = playersToFilter.filter(p => p.isHot);
+            if (statusFilters.cold) playersToFilter = playersToFilter.filter(p => p.isCold);
+            playersToFilter = playersToFilter.filter(player => {
+                if (teamFilter && player.team !== teamFilter) return false;
+                if (searchQuery && !player.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+                return true;
+            });
+            const visible = playersToFilter.sort((a,b) => (a.order ?? a.rank) - (b.order ?? b.rank));
+
+            const cloned = [...prevPlayers];
+            const fromIdx = cloned.findIndex(p => p.id === draggedItem.id);
+            if (fromIdx === -1) return prevPlayers;
+            const [moved] = cloned.splice(fromIdx, 1);
+
+            const getOrder = (p) => p ? (p.order ?? p.rank) : null;
+            const between = (a, b) => {
+                const ao = getOrder(a) ?? ((getOrder(b) ?? 1) - 1);
+                const bo = getOrder(b) ?? (ao + 2);
+                return (ao + bo) / 2;
+            };
+
+            let left, right;
+            if (where === 'before') {
+                left = visible[visIndex - 1] ?? null;
+                right = visible[visIndex] ?? null;
+            } else {
+                left = visible[visIndex] ?? null;
+                right = visible[visIndex + 1] ?? null;
+            }
+
+            let newOrder;
+            if (!left && right) newOrder = getOrder(right) - 1;
+            else if (left && !right) newOrder = getOrder(left) + 1;
+            else newOrder = between(left, right);
+
+            let newTier;
+            if (left && right) {
+                newTier = (left.tier === right.tier) ? left.tier : (where === 'before' ? left.tier : right.tier);
+            } else if (left) newTier = left.tier;
+            else if (right) newTier = right.tier;
+            else newTier = moved.tier;
+
+            const updatedMoved = { ...moved, order: newOrder, tier: newTier };
+            cloned.push(updatedMoved);
+
+            const normalized = cloned
+                .sort((a,b) => (a.order ?? a.rank) - (b.order ?? b.rank))
+                .map((p, i) => ({ ...p, rank: i + 1, order: i + 1 }));
+
+            return calculatePositionalRanks(normalized);
+        });
+
+        handleDragEnd();
+    };
+
     const handleDrop = (e) => {
         e.preventDefault();
         if (draggedItem === null || dropInfo.index === null) {
@@ -379,77 +513,6 @@ const handleDragOver = (e, index, isHeader = false) => {
 
         handleDragEnd();
     };
-
-    const handleDropAtBoundary = (e, tier, where) => {
-        e.preventDefault();
-        if (!draggedItem) return;
-
-        setPlayersWithHistory(prevPlayers => {
-            const cloned = [...prevPlayers];
-
-            // Remove moved player
-            const fromIdx = cloned.findIndex(p => p.id === draggedItem.id);
-            if (fromIdx === -1) return prevPlayers;
-            const [moved] = cloned.splice(fromIdx, 1);
-
-            const getOrder = (p) => p ? (p.order ?? p.rank) : null;
-
-            let targetTier = moved.tier;
-            let newOrder;
-
-            if (where === 'above') {
-                // last of previous tier relative to 'tier'
-                const prevTierNum = Math.max(1, tier - 1);
-                targetTier = prevTierNum;
-
-                const lastPrev = cloned
-                  .filter(p => p.tier === prevTierNum)
-                  .sort((a,b) => (a.order ?? a.rank) - (b.order ?? b.rank))
-                  .slice(-1)[0];
-
-                if (lastPrev) {
-                    newOrder = (getOrder(lastPrev) ?? 0) + 0.5;
-                } else {
-                    // if previous tier has no players (edge case), place before first of 'tier'
-                    const firstCurr = cloned
-                      .filter(p => p.tier === tier)
-                      .sort((a,b) => (a.order ?? a.rank) - (b.order ?? b.rank))[0];
-                    newOrder = (getOrder(firstCurr) ?? 1) - 0.5;
-                    targetTier = tier;
-                }
-            } else if (where === 'below') {
-                // first of this tier
-                targetTier = tier;
-                const firstCurr = cloned
-                  .filter(p => p.tier === tier)
-                  .sort((a,b) => (a.order ?? a.rank) - (b.order ?? b.rank))[0];
-                if (firstCurr) {
-                    newOrder = (getOrder(firstCurr) ?? 1) - 0.5;
-                } else {
-                    // no one in current tier: put after last of previous
-                    const lastPrev = cloned
-                      .filter(p => p.tier === tier - 1)
-                      .sort((a,b) => (a.order ?? a.rank) - (b.order ?? b.rank))
-                      .slice(-1)[0];
-                    newOrder = ((getOrder(lastPrev) ?? 0) + 0.5);
-                }
-            } else {
-                return prevPlayers;
-            }
-
-            const updatedMoved = { ...moved, order: newOrder, tier: targetTier };
-            cloned.push(updatedMoved);
-
-            const normalized = cloned
-              .sort((a,b) => (a.order ?? a.rank) - (b.order ?? b.rank))
-              .map((p, i) => ({ ...p, rank: i + 1, order: i + 1 }));
-
-            return calculatePositionalRanks(normalized);
-        });
-
-        handleDragEnd();
-    };
-
 
 
 
@@ -537,19 +600,19 @@ const handleDragOver = (e, index, isHeader = false) => {
                                     <React.Fragment key={player.id}>
                                         {showTierHeader && (
                                             <>
-                                            {index !== 0 && dropInfo.index === index && dropInfo.above && <DropZone onDrop={(e) => handleDropAtBoundary(e, player.tier, "above")} />}
+                                            {index !== 0 && <DropAnchorRow onDrop={(e) => handleDropAtBoundary(e, index, 'above')} />}
                                             <tr className="bg-blue-800/50 text-white"
                                                 onDragOver={(e) => handleDragOver(e, index, true)}>
                                                 <td colSpan="10" className="px-4 py-1 text-sm font-bold tracking-wider">
                                                     Tier {player.tier}
+                                            <DropAnchorRow onDrop={(e) => handleDropAtBoundary(e, index, 'below')} />
                                                 </td>
-                                            {dropInfo.index === index && !dropInfo.above && <DropZone onDrop={(e) => handleDropAtBoundary(e, player.tier, "below")} />}
                                             </tr>
                                             {dropInfo.index === index && !dropInfo.above && <DropIndicator />}
                                             </>
                                         )}
                                         
-                                        {!showTierHeader && dropInfo.index === index && dropInfo.above && <DropIndicator />}
+                                        <DropAnchorRow onDrop={(e) => handleDropAtRow(e, index, 'before')} />
 
                                         <tr className={`border-b border-gray-700 hover:bg-gray-700/50 transition-colors duration-150 cursor-grab active:cursor-grabbing ${draggedItem?.id === player.id ? 'opacity-40' : ''} ${player.unavailable ? 'opacity-50 bg-gray-800/60' : ''}`}
                                             draggable 
@@ -605,7 +668,7 @@ const handleDragOver = (e, index, isHeader = false) => {
                                                 </button>
                                             </td>
                                         </tr>
-                                        {!showTierHeader && dropInfo.index === index && !dropInfo.above && <DropIndicator />}
+                                        <DropAnchorRow onDrop={(e) => handleDropAtRow(e, index, 'after')} />
                                     </React.Fragment>
                                 );
                             }) : (
@@ -618,7 +681,7 @@ const handleDragOver = (e, index, isHeader = false) => {
                              {/* Drop-Zone am Ende der Liste */}
                              <tr onDragOver={(e) => handleDragOver(e, filteredAndSortedPlayers.length, false)}>
                                 <td colSpan={10} className="p-4 h-full"> 
-                                    {dropInfo.index === filteredAndSortedPlayers.length && <DropIndicator />}
+                                    <DropAnchorRow onDrop={(e) => handleDropAtRow(e, filteredAndSortedPlayers.length-1, 'after')} />
                                 </td>
                              </tr>
                         </tbody>
