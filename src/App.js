@@ -278,7 +278,7 @@ const InteractivePlayerTable = () => {
 
     const handleDragEnd = () => {
         setDraggedItem(null);
-        setDropInfo({ index: null, above: false });
+        setDropInfo({ index: null, above: false, isHeader: false });
     };
 
     
@@ -291,6 +291,86 @@ const handleDragOver = (e, index, isHeader = false) => {
             setDropInfo({ index, above: isAbove, isHeader });
         }
     };
+    const handleDrop = (e) => {
+        e.preventDefault();
+        if (draggedItem === null || dropInfo.index === null) {
+            handleDragEnd();
+            return;
+        }
+
+        const { index: visIndex, above, isHeader } = dropInfo;
+
+        setPlayersWithHistory(prevPlayers => {
+            const visible = filteredAndSortedPlayers; // already sorted by order
+            const cloned = [...prevPlayers];
+
+            const prevVis = visible[visIndex - 1] ?? null;
+            const targetVis = visible[visIndex] ?? null;
+            const nextVis  = visible[visIndex + 1] ?? null;
+
+            const fromIdx = cloned.findIndex(p => p.id === draggedItem.id);
+            if (fromIdx === -1) return prevPlayers;
+
+            const [moved] = cloned.splice(fromIdx, 1);
+
+            const getOrder = (p) => p ? (p.order ?? p.rank) : null;
+            const between = (a, b) => {
+                const ao = getOrder(a) ?? (getOrder(b) ?? 0) - 1;
+                const bo = getOrder(b) ?? (getOrder(a) ?? 0) + 1;
+                return (ao + bo) / 2;
+            };
+
+            let newOrder = getOrder(moved);
+            let newTier = moved.tier;
+
+            if (isHeader) {
+                // Hovering the "Tier X" header boundary
+                const boundary = between(prevVis, targetVis);
+                if (above) {
+                    newOrder = boundary - 0.2;
+                    newTier = prevVis ? prevVis.tier : (targetVis ? Math.max(1, targetVis.tier - 1) : moved.tier);
+                } else {
+                    newOrder = boundary + 0.2;
+                    newTier = targetVis ? targetVis.tier : moved.tier;
+                }
+            } else {
+                // Hovering a player row
+                if (!targetVis) {
+                    const last = visible[visible.length - 1];
+                    newOrder = (getOrder(last) ?? 0) + 1;
+                    newTier  = last?.tier ?? moved.tier;
+                } else if (above) {
+                    if (prevVis) {
+                        newOrder = between(prevVis, targetVis);
+                        newTier = (prevVis.tier === targetVis.tier) ? targetVis.tier : prevVis.tier;
+                    } else {
+                        newOrder = getOrder(targetVis) - 1;
+                        newTier = targetVis.tier;
+                    }
+                } else {
+                    if (nextVis) {
+                        newOrder = between(targetVis, nextVis);
+                        newTier = (targetVis.tier === nextVis.tier) ? targetVis.tier : nextVis.tier;
+                    } else {
+                        newOrder = getOrder(targetVis) + 1;
+                        newTier = targetVis.tier;
+                    }
+                }
+            }
+
+            const updatedMoved = { ...moved, order: newOrder, tier: newTier };
+            cloned.push(updatedMoved);
+
+            const normalized = cloned
+              .sort((a,b) => (a.order ?? a.rank) - (b.order ?? b.rank))
+              .map((p, i) => ({ ...p, rank: i + 1, order: i + 1 }));
+
+            return calculatePositionalRanks(normalized);
+        });
+
+        handleDragEnd();
+    };
+
 
 
 
