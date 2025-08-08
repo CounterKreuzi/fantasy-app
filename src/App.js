@@ -59,12 +59,12 @@ const RedoIcon = (props) => (
 
 // Hilfskomponente für den visuellen Drop-Indikator
 const DropIndicator = () => (
-    <tr><td colSpan="10" className="p-0"><div className="h-2 bg-blue-500 rounded-full mx-2 my-1 transition-[height] duration-100 ease-out"></div></td></tr>
+    <tr><td colSpan="10" className="p-0"><div className="h-1.5 bg-blue-500 rounded-full mx-2 my-1 pointer-events-none"></div></td></tr>
 );
 
 const DropAnchorRow = ({ onDrop }) => (
     <tr onDrop={onDrop} onDragOver={(e) => e.preventDefault()}>
-        <td colSpan="10" className="p-0"><div className="h-2 bg-blue-500 rounded-full mx-2 my-1 transition-[height] duration-100 ease-out"></div></td>
+        <td colSpan="10" className="p-0"><div className="h-1.5 bg-blue-500 rounded-full mx-2 my-1 pointer-events-none"></div></td>
     </tr>
 );
 
@@ -85,11 +85,11 @@ const InteractivePlayerTable = () => {
     // Drag & Drop State
     const [draggedItem, setDraggedItem] = useState(null);
     const [dropInfo, setDropInfo] = useState({ index: null, above: false, isHeader: false });
+    const [isDragging, setIsDragging] = useState(false);
+    const rafRef = useRef(null);
 
     // History und Player Management
     const [history, setHistory] = useState([]);
-    const hoverTimer = useRef(null);
-    const lastCommittedKey = useRef(null);
     const [historyIndex, setHistoryIndex] = useState(-1);
     const isPerformingHistoryAction = useRef(false);
 
@@ -282,32 +282,32 @@ const InteractivePlayerTable = () => {
 
     const handleDragStart = (e, player) => {
         setDraggedItem(player);
+        setIsDragging(true);
     };
 
     const handleDragEnd = () => {
         setDraggedItem(null);
-        if (hoverTimer && hoverTimer.current) { clearTimeout(hoverTimer.current); hoverTimer.current = null; }
-        if (lastCommittedKey) lastCommittedKey.current = null;
         setDropInfo({ index: null, above: false, isHeader: false });
+        setIsDragging(false);
+        if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
 
     
-
 const handleDragOver = (e, index, isHeader = false) => {
         e.preventDefault();
-        const rect = e.currentTarget.getBoundingClientRect();
-        const isAbove = e.clientY < rect.top + rect.height / 2;
-
-        const key = `${index}|${isHeader ? 'H' : 'R'}|${isAbove ? 'A' : 'B'}`;
-        if (key === lastCommittedKey.current) return;
-
-        if (hoverTimer.current) clearTimeout(hoverTimer.current);
-        hoverTimer.current = setTimeout(() => {
-            setDropInfo({ index, above: isAbove, isHeader });
-            lastCommittedKey.current = key;
-        }, 90);
+        const target = e.currentTarget;
+        if (rafRef.current) cancelAnimationFrame(rafRef.current);
+        rafRef.current = requestAnimationFrame(() => {
+            const rect = target.getBoundingClientRect();
+            const mid = rect.top + rect.height / 2;
+            const DEAD = Math.min(8, rect.height * 0.2);
+            const delta = e.clientY - mid;
+            const nextAbove = isHeader ? true : (Math.abs(delta) <= DEAD ? dropInfo.above : (delta < 0));
+            if (dropInfo.index !== index || dropInfo.above !== nextAbove || dropInfo.isHeader !== isHeader) {
+                setDropInfo({ index, above: nextAbove, isHeader });
+            }
+        });
     };
-
     // Explicit drop handlers for anchor rows
     const handleDropAtBoundary = (e, visIndex, where /* 'above'|'below' */) => {
         e.preventDefault();
@@ -587,8 +587,8 @@ const handleDragOver = (e, index, isHeader = false) => {
                     </div>
                 </div>
 
-                <div className="flex-grow overflow-y-auto relative">
-                    <table className="w-full min-w-[900px] border-separate border-spacing-0">
+                <div className={`flex-grow overflow-y-auto relative ${isDragging ? "select-none" : ""}` }>
+                    <table className="w-full min-w-[900px] table-fixed border-separate border-spacing-0">
                         <thead className="bg-gray-800">
                             <tr className="sticky top-0 bg-gray-800 z-10 border-b-2 border-gray-600">
                                 <th className="p-3 text-center w-12 font-semibold">✓</th>
