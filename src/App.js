@@ -58,8 +58,12 @@ const RedoIcon = (props) => (
 );
 
 // Hilfskomponente für den visuellen Drop-Indikator
-const DropIndicator = () => (
-    <tr><td colSpan="10" className="p-0"><div className="h-1.5 bg-blue-500 rounded-full mx-2 my-1"></div></td></tr>
+const DropIndicator = ({ index, isHeader, above, setDropInfo }) => (
+    <tr onDragOver={(e) => { e.preventDefault(); setDropInfo({ index, above, isHeader }); }}>
+        <td colSpan="10" className="p-0">
+            <div className="h-1.5 bg-blue-500 rounded-full mx-2 my-1"></div>
+        </td>
+    </tr>
 );
 
 
@@ -457,7 +461,7 @@ const handleDragOver = (e, index, isHeader = false) => {
                                     <React.Fragment key={player.id}>
                                         {showTierHeader && (
                                             <>
-                                            {index !== 0 && dropInfo.index === index && dropInfo.above && <DropIndicator />}
+                                            {index !== 0 && dropInfo.index === index && dropInfo.above && <DropIndicator index={index} isHeader={true} above={true} setDropInfo={setDropInfo} />}
                                             <tr className="bg-blue-800/50 text-white"
                                                 onDragOver={(e) => handleDragOver(e, index, true)}>
                                                 <td colSpan="10" className="px-4 py-1 text-sm font-bold tracking-wider">
@@ -468,7 +472,7 @@ const handleDragOver = (e, index, isHeader = false) => {
                                             </>
                                         )}
                                         
-                                        {!showTierHeader && dropInfo.index === index && dropInfo.above && <DropIndicator />}
+                                        {!showTierHeader && dropInfo.index === index && dropInfo.above && <DropIndicator index={index} isHeader={false} above={true} setDropInfo={setDropInfo} />}
 
                                         <tr className={`border-b border-gray-700 hover:bg-gray-700/50 transition-colors duration-150 cursor-grab active:cursor-grabbing ${draggedItem?.id === player.id ? 'opacity-40' : ''} ${player.unavailable ? 'opacity-50 bg-gray-800/60' : ''}`}
                                             draggable 
@@ -524,7 +528,7 @@ const handleDragOver = (e, index, isHeader = false) => {
                                                 </button>
                                             </td>
                                         </tr>
-                                        {!showTierHeader && dropInfo.index === index && !dropInfo.above && <DropIndicator />}
+                                        {!showTierHeader && dropInfo.index === index && !dropInfo.above && <DropIndicator index={index} isHeader={false} above={false} setDropInfo={setDropInfo} />}
                                     </React.Fragment>
                                 );
                             }) : (
@@ -537,7 +541,7 @@ const handleDragOver = (e, index, isHeader = false) => {
                              {/* Drop-Zone am Ende der Liste */}
                              <tr onDragOver={(e) => handleDragOver(e, filteredAndSortedPlayers.length, false)}>
                                 <td colSpan={10} className="p-4 h-full"> 
-                                    {dropInfo.index === filteredAndSortedPlayers.length && <DropIndicator />}
+                                    {dropInfo.index === filteredAndSortedPlayers.length && <DropIndicator index={filteredAndSortedPlayers.length} isHeader={false} above={false} setDropInfo={setDropInfo} />}
                                 </td>
                              </tr>
                         </tbody>
