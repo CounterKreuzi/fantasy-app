@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useRef } from 'react';
 
 /* =========================
-   SVG-Icons (unverändert)
+   SVG-Icons
    ========================= */
 const X = (props) => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
@@ -60,34 +60,36 @@ const RedoIcon = (props) => (
 );
 
 /* =========================
-   Drop-Zone Komponenten
+   Drop-Zone: große Hit-Area, halbhohe Visualisierung
    ========================= */
-
-// Sichtbare, platzhaltende Dropzone-Reihe.
-// Für den Test bleibt sie sichtbar. Später nur Outline + Hover-Highlight.
+// Für besseres Droppen hat die Dropzone eine KLICK-/DROP-Fläche von ~18px,
+// zeigt aber nur einen ~6px hohen Balken. So ist sie „leicht zu treffen“,
+// ohne optisch zu dominant zu sein.
 const DropZoneRow = ({
   onDrop,
   onDragOver,
   ariaLabel = 'Drop here',
   active = false,
+  hitHeightPx = 18,     // vergrößerte unsichtbare Trefferfläche
+  visualHeightPx = 6,    // halb so hoch wie vorher (~6px)
 }) => {
   return (
-    <tr
-      onDrop={onDrop}
-      onDragOver={onDragOver}
-      // Kein onDragLeave nötig, wir halten es bewusst simpel.
-    >
+    <tr onDrop={onDrop} onDragOver={onDragOver}>
       <td colSpan="10" className="p-0">
         <div
-          className={[
-            // Feste Höhe => kein Layout-Shift
-            'h-3 mx-2 my-1 rounded-full transition-all duration-75',
-            // Für Tests gut sichtbar
-            active ? 'bg-blue-400' : 'bg-blue-700/60',
-            'outline outline-1 outline-blue-900/40'
-          ].join(' ')}
+          style={{ height: `${hitHeightPx}px` }}
+          className="mx-2 my-1 flex items-center"
           aria-label={ariaLabel}
-        />
+        >
+          <div
+            style={{ height: `${visualHeightPx}px` }}
+            className={[
+              'w-full rounded-full transition-all duration-75',
+              active ? 'bg-blue-400' : 'bg-blue-700/60',
+              'outline outline-1 outline-blue-900/40'
+            ].join(' ')}
+          />
+        </div>
       </td>
     </tr>
   );
@@ -109,10 +111,9 @@ const InteractivePlayerTable = () => {
   });
   const [editingCell, setEditingCell] = useState(null);
 
-  // Drag & Drop State
+  // Drag & Drop
   const [draggedItem, setDraggedItem] = useState(null);
-  // Für aktives Styling der Dropzonen (einfach gehalten)
-  const [hoverKey, setHoverKey] = useState(null); // string key der Zone
+  const [hoverKey, setHoverKey] = useState(null);
 
   // History
   const [history, setHistory] = useState([]);
@@ -309,7 +310,6 @@ const InteractivePlayerTable = () => {
     setHoverKey(null);
   };
 
-  // Hilfsfunktionen
   const getOrder = (p) => p ? (p.order ?? p.rank) : null;
   const between = (a, b) => {
     const ao = getOrder(a) ?? ((getOrder(b) ?? 1) - 1);
@@ -317,7 +317,6 @@ const InteractivePlayerTable = () => {
     return (ao + bo) / 2;
   };
 
-  // Baut die "sichtbare" Liste jeweils frisch aus prevPlayers nach denselben Filtern
   const buildVisibleFrom = (prevPlayers) => {
     let list = [...prevPlayers];
     if (activePositionFilter !== 'Overall' && activePositionFilter) {
@@ -338,7 +337,7 @@ const InteractivePlayerTable = () => {
     return list.sort((a,b) => (a.order ?? a.rank) - (b.order ?? b.rank));
   };
 
-  /* ----- Drop: Tier-Grenze (genau EINE Zone oben & unten) ----- */
+  /* ----- Drop: Tier-Grenze (eine Zone oben & unten; über Tier 1 KEINE) ----- */
   const handleDropAtBoundary = (e, visIndex, where /* 'above' | 'below' */) => {
     e.preventDefault();
     if (!draggedItem) return;
@@ -373,7 +372,7 @@ const InteractivePlayerTable = () => {
     handleDragEnd();
   };
 
-  /* ----- Drop: Zwischen zwei Reihen (genau EINE Zone pro Gap) ----- */
+  /* ----- Drop: Zwischen zwei Spielerreihen (eine Zone pro Gap) ----- */
   const handleDropBetweenRows = (e, visIndex /* drop VOR diesem Index */) => {
     e.preventDefault();
     if (!draggedItem) return;
@@ -516,9 +515,7 @@ const InteractivePlayerTable = () => {
               </tr>
             </thead>
 
-            <tbody
-              onDragOver={(e) => e.preventDefault()}
-            >
+            <tbody onDragOver={(e) => e.preventDefault()}>
               {/* Falls keine Spieler */}
               {filteredAndSortedPlayers.length === 0 && (
                 <tr>
@@ -528,19 +525,18 @@ const InteractivePlayerTable = () => {
                 </tr>
               )}
 
-              {/* Render mit genau 1 Dropzone pro Gap + je 1 über/unter Tier */}
               {filteredAndSortedPlayers.map((player, index) => {
                 const prev = filteredAndSortedPlayers[index - 1] || null;
                 const isNewTier = index === 0 || player.tier !== prev?.tier;
 
                 const tierAboveKey = `tier-${player.tier}-above-${index}`;
                 const tierBelowKey = `tier-${player.tier}-below-${index}`;
-                const gapKey = `gap-before-${index}`; // Gap vor aktueller Zeile
+                const gapKey = `gap-before-${index}`;
 
                 return (
                   <React.Fragment key={player.id}>
-                    {/* ---- Tier-Header: genau EINE Dropzone darüber ---- */}
-                    {isNewTier && (
+                    {/* ---- Tier-Header: KEINE Dropzone über Tier 1 ---- */}
+                    {isNewTier && player.tier !== 1 && (
                       <DropZoneRow
                         ariaLabel={`Tier ${player.tier} oben`}
                         active={hoverKey === tierAboveKey}
@@ -549,7 +545,7 @@ const InteractivePlayerTable = () => {
                       />
                     )}
 
-                    {/* ---- Tier-Header selbst ---- */}
+                    {/* ---- Tier-Header ---- */}
                     {isNewTier && (
                       <tr className="bg-blue-800/50 text-white">
                         <td colSpan="10" className="px-4 py-1 text-sm font-bold tracking-wider">
@@ -558,7 +554,7 @@ const InteractivePlayerTable = () => {
                       </tr>
                     )}
 
-                    {/* ---- Tier-Header: genau EINE Dropzone darunter ---- */}
+                    {/* ---- Tier-Header: Dropzone UNTER der Tier-Zeile (auch bei Tier 1) ---- */}
                     {isNewTier && (
                       <DropZoneRow
                         ariaLabel={`Tier ${player.tier} unten`}
@@ -568,8 +564,7 @@ const InteractivePlayerTable = () => {
                       />
                     )}
 
-                    {/* ---- Zwischen Spielerzeilen: GENAU EINE Zone pro Gap ----
-                          => Vor der aktuellen Zeile, aber nur wenn NICHT direkt nach Tier-Below (sonst doppelt) */}
+                    {/* ---- Zwischen Spielerzeilen: eine Zone pro Gap ---- */}
                     {!isNewTier && (
                       <DropZoneRow
                         ariaLabel={`Gap vor Zeile ${index}`}
@@ -583,7 +578,7 @@ const InteractivePlayerTable = () => {
                     <tr
                       className={`border-b border-gray-700 hover:bg-gray-700/50 transition-colors duration-150 cursor-grab active:cursor-grabbing ${draggedItem?.id === player.id ? 'opacity-40' : ''} ${player.unavailable ? 'opacity-50 bg-gray-800/60' : ''}`}
                       draggable
-                      onDragStart={(e) => handleDragStart(e, player)}
+                      onDragStart={(e) => setDraggedItem(player)}
                       onDragEnd={handleDragEnd}
                     >
                       <td className="p-3 text-center">
@@ -682,7 +677,7 @@ const InteractivePlayerTable = () => {
                 );
               })}
 
-              {/* Eine Abschluss-Dropzone am Ende (nach letzter Zeile) */}
+              {/* Abschluss-Dropzone am Ende */}
               {filteredAndSortedPlayers.length > 0 && (
                 <DropZoneRow
                   ariaLabel="Ende der Liste"
