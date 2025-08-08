@@ -578,7 +578,8 @@ const InteractivePlayerTable = () => {
                     <tr
                       className={`border-b border-gray-700 hover:bg-gray-700/50 transition-colors duration-150 cursor-grab active:cursor-grabbing ${draggedItem?.id === player.id ? 'opacity-40' : ''} ${player.unavailable ? 'opacity-50 bg-gray-800/60' : ''}`}
                       draggable
-                      onDragStart={(e) => setDraggedItem(player)}
+                     onDragStart={(e) => handleDragStart(e, player)}
+
                       onDragEnd={handleDragEnd}
                     >
                       <td className="p-3 text-center">
