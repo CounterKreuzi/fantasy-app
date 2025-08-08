@@ -290,6 +290,7 @@ const InteractivePlayerTable = () => {
         }
     };
 
+
 const handleDrop = (e) => {
   e.preventDefault();
   if (draggedItem === null || dropInfo.index === null) {
@@ -317,12 +318,13 @@ const handleDrop = (e) => {
 
     // --- Einfügeindex in der Hauptliste berechnen ---
     let insertIdx;
+    let targetIdxInMain = -1;
 
     if (!targetVisiblePlayer) {
-      // Sichtbare Liste leer -> Einfügen an Anfang, Tier = 1
+      // Sichtbare Liste leer -> Einfügen an Anfang
       insertIdx = 0;
     } else {
-      const targetIdxInMain = reordered.findIndex(p => p.id === targetVisiblePlayer.id);
+      targetIdxInMain = reordered.findIndex(p => p.id === targetVisiblePlayer.id);
       insertIdx = above ? targetIdxInMain : targetIdxInMain + 1;
     }
 
@@ -337,14 +339,24 @@ const handleDrop = (e) => {
     // Durch das Entfernen kann sich der Zielindex verschieben
     if (fromIdx < insertIdx) insertIdx--;
 
-    // --- Ziel-Tier bestimmen: IMMER vom Ziel ableiten, NICHT von playerBefore! ---
-    let targetTier = 1;
-    if (!targetVisiblePlayer) {
-      // Sichtbar leer: fallback auf zuletzt existierendes Tier
-      targetTier = reordered[reordered.length - 1]?.tier ?? 1;
-    } else {
-      // Egal ob above/below: wir wollen ins Tier des Ziel-Spielers (bei Header-Drop ist target der erste Spieler des Tiers)
+    // --- Ziel-Tier bestimmen ---
+    // Standard: Tier des Zielspielers (oder letztes existierendes Tier, wenn Liste leer)
+    let targetTier = reordered[reordered.length - 1]?.tier ?? 1;
+    if (targetVisiblePlayer) {
       targetTier = targetVisiblePlayer.tier;
+
+      // Spezialfall "Tier-Grenze": Wenn wir 'above' über dem ersten Spieler eines Tiers droppen,
+      // soll der Spieler als LETZTER des VORHERIGEN Tiers einsortiert werden.
+      if (above) {
+        // Ist der targetVisiblePlayer global der erste seiner Tier-Gruppe?
+        const prevInMain = reordered[targetIdxInMain - 1];
+        const isFirstOfTier = !prevInMain || prevInMain.tier !== targetVisiblePlayer.tier;
+
+        if (isFirstOfTier && prevInMain) {
+          // Dann setzen wir das Ziel-Tier explizit auf das vorherige Tier
+          targetTier = prevInMain.tier;
+        }
+      }
     }
 
     // Spieler mit korrektem Tier einsetzen
@@ -358,6 +370,7 @@ const handleDrop = (e) => {
 
   handleDragEnd();
 };
+
 
 
     const positionButtons = ['Overall', 'QB', 'RB', 'WR', 'TE', 'FLEX', 'K', 'DST'];
