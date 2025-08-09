@@ -60,31 +60,32 @@ const RedoIcon = (props) => (
 );
 
 /* =========================
-   Drop-Zone (schmal, Indikatorhöhe = Zeilenhöhe, Hover-only sichtbar)
+   Drop-Zone (nur sichtbar während Drag, Indikatorhöhe = Zeilenhöhe)
    ========================= */
 const DropZoneRow = ({
   onDrop,
   onDragOver,
   ariaLabel = 'Drop here',
   active = false,
-  hitHeightPx = 6,   // sehr schmal – exakt so hoch wie der Indikator
-  visualHeightPx = 6 // Indikator = gesamte Drop-Zeilenhöhe
+  isDragging = false,  // <— nur dann zeigen wir etwas
+  hitHeightPx = 6,
+  visualHeightPx = 6,
 }) => {
   return (
     <tr onDrop={onDrop} onDragOver={onDragOver}>
       <td colSpan="10" className="p-0">
         <div
           style={{ height: `${hitHeightPx}px` }}
-          className="m-0 flex items-center group"
+          className="m-0 flex items-center"
           aria-label={ariaLabel}
         >
           <div
             style={{ height: `${visualHeightPx}px` }}
             className={[
               'w-full rounded-full transition-opacity duration-150',
-              active
+              active && isDragging
                 ? 'opacity-100 bg-blue-400 outline outline-1 outline-blue-900/40'
-                : 'opacity-0 group-hover:opacity-100 bg-blue-700/60 outline outline-1 outline-blue-900/40'
+                : 'opacity-0'
             ].join(' ')}
           />
         </div>
@@ -111,7 +112,7 @@ const InteractivePlayerTable = () => {
 
   // Drag & Drop
   const [draggedItem, setDraggedItem] = useState(null);
-  const [hoverKey, setHoverKey] = useState(null); // entscheidet Drop-Ziel
+  const [hoverKey, setHoverKey] = useState(null);
 
   // History
   const [history, setHistory] = useState([]);
@@ -156,10 +157,8 @@ const InteractivePlayerTable = () => {
     });
   }, [addToHistory]);
 
-  /* Teams-Auswahl: wird unten benutzt → ESLint-clean */
   const uniqueTeams = useMemo(() => [...new Set(players.map(p => p.team))].sort(), [players]);
 
-  /* Status-Toggle Handler: wird von Buttons genutzt → ESLint-clean */
   const handleStatusFilterToggle = (filterKey) => {
     setStatusFilters(prev => ({ ...prev, [filterKey]: !prev[filterKey] }));
   };
@@ -335,8 +334,8 @@ const InteractivePlayerTable = () => {
       if (fromIdx === -1) return prevPlayers;
       const [moved] = cloned.splice(fromIdx, 1);
 
-      const left = visible[visIndex - 1] ?? null; // letzter im oberen Block
-      const right = visible[visIndex] ?? null;     // erster im unteren Block
+      const left = visible[visIndex - 1] ?? null;
+      const right = visible[visIndex] ?? null;
 
       const newOrder = between(left, right);
       let newTier;
@@ -381,7 +380,7 @@ const InteractivePlayerTable = () => {
       else newOrder = between(left, right);
 
       let newTier;
-      if (left && right) newTier = (left.tier === right.tier) ? left.tier : right.tier; // Gap gehört logisch zum rechten Tier
+      if (left && right) newTier = (left.tier === right.tier) ? left.tier : right.tier;
       else if (left) newTier = left.tier;
       else if (right) newTier = right.tier;
       else newTier = moved.tier;
@@ -398,7 +397,7 @@ const InteractivePlayerTable = () => {
     handleDragEnd();
   };
 
-  /* ======= GLOBALER DROP-HANDLER ======= */
+  /* ======= GLOBALER DROP-HANDLER (nutzt hoverKey) ======= */
   const handleGlobalDrop = (e) => {
     e.preventDefault();
     if (!draggedItem || !hoverKey) { handleDragEnd(); return; }
@@ -417,10 +416,7 @@ const InteractivePlayerTable = () => {
     handleDragEnd();
   };
 
-  /* Positions-Buttons als Array → genutzt im Render */
   const positionButtons = ['Overall', 'QB', 'RB', 'WR', 'TE', 'FLEX', 'K', 'DST'];
-
-  /* Spielerzeilen: etwas mehr Padding */
   const tdBase = "px-3 py-3 leading-tight";
 
   return (
@@ -487,7 +483,7 @@ const InteractivePlayerTable = () => {
                 </select>
               </div>
 
-              <div className="relative flex items-center">
+              <div className="relative flex items中心">
                 <SearchIcon className="w-4 h-4 text-gray-400 absolute left-3 pointer-events-none" />
                 <input
                   id="search-filter"
@@ -560,6 +556,7 @@ const InteractivePlayerTable = () => {
                       <DropZoneRow
                         ariaLabel={`Tier ${player.tier} oben`}
                         active={hoverKey === tierAboveKey}
+                        isDragging={!!draggedItem}
                         onDragOver={(e) => { e.preventDefault(); setHoverKey(tierAboveKey); }}
                       />
                     )}
@@ -578,20 +575,22 @@ const InteractivePlayerTable = () => {
                       <DropZoneRow
                         ariaLabel={`Tier ${player.tier} unten`}
                         active={hoverKey === tierBelowKey}
+                        isDragging={!!draggedItem}
                         onDragOver={(e) => { e.preventDefault(); setHoverKey(tierBelowKey); }}
                       />
                     )}
 
-                    {/* ---- Zwischen Spielerzeilen: eine Zone pro Gap (sehr schmal) ---- */}
+                    {/* ---- Zwischen Spielerzeilen: eine Zone pro Gap ---- */}
                     {!isNewTier && (
                       <DropZoneRow
                         ariaLabel={`Gap vor Zeile ${index}`}
                         active={hoverKey === gapKey}
+                        isDragging={!!draggedItem}
                         onDragOver={(e) => { e.preventDefault(); setHoverKey(gapKey); }}
                       />
                     )}
 
-                    {/* ---- Spielerzeile (etwas mehr Padding) ---- */}
+                    {/* ---- Spielerzeile ---- */}
                     <tr
                       className={`border-b border-gray-700 hover:bg-gray-700/50 transition-colors duration-150 cursor-grab active:cursor-grabbing ${draggedItem?.id === player.id ? 'opacity-40' : ''} ${player.unavailable ? 'opacity-50 bg-gray-800/60' : ''}`}
                       draggable
@@ -699,6 +698,7 @@ const InteractivePlayerTable = () => {
                 <DropZoneRow
                   ariaLabel="Ende der Liste"
                   active={hoverKey === 'end'}
+                  isDragging={!!draggedItem}
                   onDragOver={(e) => { e.preventDefault(); setHoverKey('end'); }}
                 />
               )}
