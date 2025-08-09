@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 
 /* =========================
    SVG-Icons
@@ -83,7 +83,9 @@ const DropZoneRow = ({
             style={{ height: `${visualHeightPx}px` }}
             className={[
               'w-full rounded-full transition-opacity duration-150',
-              active && isDragging ? 'opacity-100 bg-blue-400 outline outline-1 outline-blue-900/40' : 'opacity-0'
+              active && isDragging
+                ? 'opacity-100 bg-blue-400 outline outline-1 outline-blue-900/40'
+                : 'opacity-0'
             ].join(' ')}
           />
         </div>
@@ -116,86 +118,6 @@ const InteractivePlayerTable = () => {
   const [history, setHistory] = useState([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const isPerformingHistoryAction = useRef(false);
-
-  // Scroll-Refs & Loop
-  const scrollRef = useRef(null);
-  const scrollRaf = useRef(null);
-  const scrollVelocity = useRef(0);
-
-  const TOP_TRIGGER = 140;    // großzügig: Filterzeile + Tabellenkopf
-  const BOTTOM_TRIGGER = 180; // etwas mehr „Gap“ unten
-  const MAX_SPEED = 14;       // px/frame (via RAF)
-  const MIN_SPEED = 2;
-
-  const ensureScrollLoop = useCallback(() => {
-    if (scrollRaf.current) return;
-    const step = () => {
-      const el = scrollRef.current;
-      if (!draggedItem || !el) {
-        scrollVelocity.current = 0;
-        scrollRaf.current = null;
-        return;
-      }
-      if (scrollVelocity.current !== 0) {
-        el.scrollTop += scrollVelocity.current;
-      }
-      scrollRaf.current = requestAnimationFrame(step);
-    };
-    scrollRaf.current = requestAnimationFrame(step);
-  }, [draggedItem]);
-
-  const stopScrollLoop = useCallback(() => {
-    if (scrollRaf.current) {
-      cancelAnimationFrame(scrollRaf.current);
-      scrollRaf.current = null;
-    }
-    scrollVelocity.current = 0;
-  }, []);
-
-  // Scroll anhand Cursor-Position im Scroll-Container
-  const handleContainerDragOver = useCallback((e) => {
-    if (!draggedItem) return;
-    e.preventDefault();
-
-    const el = scrollRef.current;
-    if (!el) return;
-
-    const rect = el.getBoundingClientRect();
-    const y = e.clientY;
-
-    let vel = 0;
-
-    // Obere Trigger-Zone
-    const distTop = y - rect.top;
-    if (distTop < TOP_TRIGGER) {
-      const pct = Math.max(0, (TOP_TRIGGER - distTop) / TOP_TRIGGER);
-      vel = - (MIN_SPEED + pct * (MAX_SPEED - MIN_SPEED));
-    }
-
-    // Untere Trigger-Zone (mit größerem Gap)
-    const distBottom = rect.bottom - y;
-    if (distBottom < BOTTOM_TRIGGER) {
-      const pct = Math.max(0, (BOTTOM_TRIGGER - distBottom) / BOTTOM_TRIGGER);
-      vel = MIN_SPEED + pct * (MAX_SPEED - MIN_SPEED);
-    }
-
-    // außerhalb der Trigger-Zonen → kein Autoscroll
-    if (distTop >= TOP_TRIGGER && distBottom >= BOTTOM_TRIGGER) {
-      scrollVelocity.current = 0;
-      return;
-    }
-
-    scrollVelocity.current = vel;
-    ensureScrollLoop();
-  }, [draggedItem, ensureScrollLoop]);
-
-  // Top-Leiste (Filter + Header-Bereich außerhalb des Scroll-Containers) → immer Scroll nach oben
-  const handleTopStripDragOver = useCallback((e) => {
-    if (!draggedItem) return;
-    e.preventDefault();
-    scrollVelocity.current = -MAX_SPEED; // kräftig nach oben
-    ensureScrollLoop();
-  }, [draggedItem, ensureScrollLoop]);
 
   const addToHistory = useCallback((newPlayers) => {
     if (isPerformingHistoryAction.current) return;
@@ -371,7 +293,7 @@ const InteractivePlayerTable = () => {
 
   /* ========== Drag & Drop Helpers ========== */
   const handleDragStart = (_e, player) => { setDraggedItem(player); };
-  const handleDragEnd = () => { setDraggedItem(null); setHoverKey(null); stopScrollLoop(); };
+  const handleDragEnd = () => { setDraggedItem(null); setHoverKey(null); stopAutoScroll(); };
 
   const getOrder = (p) => p ? (p.order ?? p.rank) : null;
   const between = (a, b) => {
@@ -400,6 +322,7 @@ const InteractivePlayerTable = () => {
     return list.sort((a,b) => (a.order ?? a.rank) - (b.order ?? b.rank));
   };
 
+  /* ----- Drop: Tier-Grenze ----- */
   const handleDropAtBoundary = (e, visIndex, where /* 'above' | 'below' */) => {
     e.preventDefault();
     if (!draggedItem) return;
@@ -434,6 +357,7 @@ const InteractivePlayerTable = () => {
     handleDragEnd();
   };
 
+  /* ----- Drop: Zwischen zwei Spielerreihen ----- */
   const handleDropBetweenRows = (e, visIndex /* drop VOR diesem Index */) => {
     e.preventDefault();
     if (!draggedItem) return;
@@ -473,6 +397,7 @@ const InteractivePlayerTable = () => {
     handleDragEnd();
   };
 
+  /* ======= GLOBALER DROP-HANDLER (nutzt hoverKey) ======= */
   const handleGlobalDrop = (e) => {
     e.preventDefault();
     if (!draggedItem || !hoverKey) { handleDragEnd(); return; }
@@ -491,15 +416,69 @@ const InteractivePlayerTable = () => {
     handleDragEnd();
   };
 
+  /* ========== Auto-Scroll an Bildschirmrändern beim Drag ==========
+     - Größere Scroll-Zonen (EDGE_PX)
+     - Geschwindigkeit skaliert mit Nähe zum Rand
+   ================================================================ */
+  const scrollContainerRef = useRef(null);
+  const rafRef = useRef(null);
+
+  const EDGE_PX = 140;                 // Größe der Scroll-Zonen oben/unten
+  const MAX_SPEED_PX_PER_FRAME = 30;   // maximale Scroll-Geschwindigkeit
+
+  const stepScroll = useCallback((dy) => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    el.scrollTop += dy;
+    rafRef.current = requestAnimationFrame(() => stepScroll(dy));
+  }, []);
+
+  const stopAutoScroll = useCallback(() => {
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+  }, []);
+
+  const maybeAutoScroll = useCallback((clientY) => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+
+    const rect = el.getBoundingClientRect();
+    let dy = 0;
+
+    const distTop = clientY - rect.top;
+    const distBot = rect.bottom - clientY;
+
+    if (distTop < EDGE_PX && distTop >= 0) {
+      const intensity = 1 - distTop / EDGE_PX; // 0..1
+      dy = -Math.ceil(intensity * MAX_SPEED_PX_PER_FRAME);
+    } else if (distBot < EDGE_PX && distBot >= 0) {
+      const intensity = 1 - distBot / EDGE_PX; // 0..1
+      dy = Math.ceil(intensity * MAX_SPEED_PX_PER_FRAME);
+    }
+
+    if (dy !== 0) {
+      // Neustarten mit neuer Geschwindigkeit
+      stopAutoScroll();
+      rafRef.current = requestAnimationFrame(() => stepScroll(dy));
+    } else {
+      // Außerhalb der Zonen -> stoppen
+      stopAutoScroll();
+    }
+  }, [EDGE_PX, MAX_SPEED_PX_PER_FRAME, stepScroll, stopAutoScroll]);
+
+  // Cleanup bei Unmount
+  useEffect(() => stopAutoScroll, [stopAutoScroll]);
+
   const positionButtons = ['Overall', 'QB', 'RB', 'WR', 'TE', 'FLEX', 'K', 'DST'];
-  // const tdBase = "px-3 py-3 leading-tight"; 
+  const tdBase = "px-3 py-3 leading-tight";
 
   return (
     <div className="max-w-7xl mx-auto p-2 sm:p-4 bg-gray-900 text-gray-200 min-h-screen font-sans">
       <div className="bg-gray-800 rounded-lg shadow-2xl flex flex-col h-[calc(100vh-2rem)]">
-
-        {/* Kopfbereich (nimmt DragOver an -> scrollt nach oben) */}
-        <div className="flex-shrink-0" onDragOver={handleTopStripDragOver}>
+        {/* Kopfbereich */}
+        <div className="flex-shrink-0">
           <div className="p-3 bg-gray-700/50 border-b border-gray-700 flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-3">
               <label htmlFor="csv-upload" className="cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 transition">
@@ -559,7 +538,7 @@ const InteractivePlayerTable = () => {
                 </select>
               </div>
 
-              <div className="relative flex items-center">
+              <div className="relative flex items中心">
                 <SearchIcon className="w-4 h-4 text-gray-400 absolute left-3 pointer-events-none" />
                 <input
                   id="search-filter"
@@ -585,31 +564,41 @@ const InteractivePlayerTable = () => {
           </div>
         </div>
 
-        {/* Tabelle / Scroll-Container */}
+        {/* Tabelle */}
         <div
-          ref={scrollRef}
+          ref={scrollContainerRef}
           className="flex-grow overflow-y-auto relative"
-          onDragOver={handleContainerDragOver}
-          onDragLeave={() => { if (draggedItem) scrollVelocity.current = 0; }}
+          onDragOver={(e) => {
+            // verhindert Drop nicht, kümmert sich nur ums Auto-Scroll
+            if (draggedItem) {
+              maybeAutoScroll(e.clientY);
+            }
+          }}
+          onDragLeave={() => stopAutoScroll()}
+          onDrop={() => stopAutoScroll()}
         >
           <table className="w-full min-w-[900px] border-separate border-spacing-0">
             <thead className="bg-gray-800">
               <tr className="sticky top-0 bg-gray-800 z-10 border-b-2 border-gray-600">
-                <th className="px-3 py-3 leading-tight text-center w-12 font-semibold">✓</th>
-                <th className="px-3 py-3 leading-tight text-left font-semibold">RK</th>
-                <th className="px-3 py-3 leading-tight text-left font-semibold">PLAYER NAME</th>
-                <th className="px-3 py-3 leading-tight text-left font-semibold">TEAM</th>
-                <th className="px-3 py-3 leading-tight text-left font-semibold">POS</th>
-                <th className="px-3 py-3 leading-tight text-center font-semibold">BYE</th>
-                <th className="px-3 py-3 leading-tight text-left min-w-[200px] font-semibold">NOTIZEN</th>
-                <th className="px-3 py-3 leading-tight text-center w-12 font-semibold"><StarIcon className="w-4 h-4 mx-auto" /></th>
-                <th className="px-3 py-3 leading-tight text-center w-12 font-semibold"><FireIcon className="w-4 h-4 mx-auto" /></th>
-                <th className="px-3 py-3 leading-tight text-center w-12 font-semibold"><SnowflakeIcon className="w-4 h-4 mx-auto" /></th>
+                <th className={`${tdBase} text-center w-12 font-semibold`}>✓</th>
+                <th className={`${tdBase} text-left font-semibold`}>RK</th>
+                <th className={`${tdBase} text-left font-semibold`}>PLAYER NAME</th>
+                <th className={`${tdBase} text-left font-semibold`}>TEAM</th>
+                <th className={`${tdBase} text-left font-semibold`}>POS</th>
+                <th className={`${tdBase} text-center font-semibold`}>BYE</th>
+                <th className={`${tdBase} text-left min-w-[200px] font-semibold`}>NOTIZEN</th>
+                <th className={`${tdBase} text-center w-12 font-semibold`}><StarIcon className="w-4 h-4 mx-auto" /></th>
+                <th className={`${tdBase} text-center w-12 font-semibold`}><FireIcon className="w-4 h-4 mx-auto" /></th>
+                <th className={`${tdBase} text-center w-12 font-semibold`}><SnowflakeIcon className="w-4 h-4 mx-auto" /></th>
               </tr>
             </thead>
 
             {/* Globaler Drop nutzt hoverKey */}
-            <tbody onDragOver={(e) => e.preventDefault()} onDrop={handleGlobalDrop}>
+            <tbody
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={handleGlobalDrop}
+            >
+              {/* Falls keine Spieler */}
               {filteredAndSortedPlayers.length === 0 && (
                 <tr>
                   <td colSpan="10" className="text-center p-8 text-gray-500">
@@ -628,7 +617,7 @@ const InteractivePlayerTable = () => {
 
                 return (
                   <React.Fragment key={player.id}>
-                    {/* Tier-Grenze: über Tier 1 keine */}
+                    {/* ---- Tier-Header: KEINE Dropzone über Tier 1 ---- */}
                     {isNewTier && player.tier !== 1 && (
                       <DropZoneRow
                         ariaLabel={`Tier ${player.tier} oben`}
@@ -638,7 +627,7 @@ const InteractivePlayerTable = () => {
                       />
                     )}
 
-                    {/* Tier-Header */}
+                    {/* ---- Tier-Header ---- */}
                     {isNewTier && (
                       <tr className="bg-blue-800/50 text-white">
                         <td colSpan="10" className="px-4 py-1 text-sm font-bold tracking-wider leading-tight">
@@ -647,7 +636,7 @@ const InteractivePlayerTable = () => {
                       </tr>
                     )}
 
-                    {/* Tier-Grenze: immer eine Zone darunter */}
+                    {/* ---- Tier-Header: Dropzone UNTER der Tier-Zeile (auch bei Tier 1) ---- */}
                     {isNewTier && (
                       <DropZoneRow
                         ariaLabel={`Tier ${player.tier} unten`}
@@ -657,7 +646,7 @@ const InteractivePlayerTable = () => {
                       />
                     )}
 
-                    {/* Zwischen Spielerzeilen */}
+                    {/* ---- Zwischen Spielerzeilen: eine Zone pro Gap ---- */}
                     {!isNewTier && (
                       <DropZoneRow
                         ariaLabel={`Gap vor Zeile ${index}`}
@@ -667,14 +656,14 @@ const InteractivePlayerTable = () => {
                       />
                     )}
 
-                    {/* Spielerzeile */}
+                    {/* ---- Spielerzeile ---- */}
                     <tr
                       className={`border-b border-gray-700 hover:bg-gray-700/50 transition-colors duration-150 cursor-grab active:cursor-grabbing ${draggedItem?.id === player.id ? 'opacity-40' : ''} ${player.unavailable ? 'opacity-50 bg-gray-800/60' : ''}`}
                       draggable
                       onDragStart={(e) => handleDragStart(e, player)}
                       onDragEnd={handleDragEnd}
                     >
-                      <td className="px-3 py-3 leading-tight text-center">
+                      <td className={`${tdBase} text-center`}>
                         <input
                           type="checkbox"
                           checked={player.unavailable}
@@ -683,7 +672,7 @@ const InteractivePlayerTable = () => {
                         />
                       </td>
 
-                      <td className={`px-3 py-3 leading-tight text-center ${player.unavailable ? 'line-through text-gray-500' : ''}`}>
+                      <td className={`${tdBase} text-center ${player.unavailable ? 'line-through text-gray-500' : ''}`}>
                         {editingCell === `${player.id}-rank` ? (
                           <input
                             type="number"
@@ -704,21 +693,21 @@ const InteractivePlayerTable = () => {
                         )}
                       </td>
 
-                      <td className={`px-3 py-3 leading-tight group ${player.unavailable ? 'line-through text-gray-500' : ''}`}>
+                      <td className={`${tdBase} group ${player.unavailable ? 'line-through text-gray-500' : ''}`}>
                         <span className="font-medium text-gray-100">{player.name}</span>
                       </td>
 
-                      <td className={`px-3 py-3 leading-tight ${player.unavailable ? 'line-through text-gray-500' : ''}`}>
+                      <td className={`${tdBase} ${player.unavailable ? 'line-through text-gray-500' : ''}`}>
                         <span className="font-semibold text-gray-400">{player.team}</span>
                       </td>
 
-                      <td className={`px-3 py-3 leading-tight ${player.unavailable ? 'line-through text-gray-500' : 'text-gray-300'}`}>{player.pos}</td>
+                      <td className={`${tdBase} ${player.unavailable ? 'line-through text-gray-500' : 'text-gray-300'}`}>{player.pos}</td>
 
-                      <td className={`px-3 py-3 leading-tight text-center ${player.unavailable ? 'line-through text-gray-500' : ''}`}>
+                      <td className={`${tdBase} text-center ${player.unavailable ? 'line-through text-gray-500' : ''}`}>
                         <span className="font-medium">{player.byeWeek}</span>
                       </td>
 
-                      <td className="px-3 py-3 leading-tight">
+                      <td className={`${tdBase}`}>
                         {editingCell === `${player.id}-notes` ? (
                           <input
                             type="text"
@@ -739,7 +728,7 @@ const InteractivePlayerTable = () => {
                         )}
                       </td>
 
-                      <td className="px-3 py-3 leading-tight text-center">
+                      <td className={`${tdBase} text-center`}>
                         <button
                           onClick={() => togglePlayerStatus(player.id, 'isFavorite')}
                           className={`p-1 rounded-full transition-colors ${player.isFavorite ? 'text-yellow-400' : 'text-gray-600 hover:text-yellow-400'}`}
@@ -748,7 +737,7 @@ const InteractivePlayerTable = () => {
                         </button>
                       </td>
 
-                      <td className="px-3 py-3 leading-tight text-center">
+                      <td className={`${tdBase} text-center`}>
                         <button
                           onClick={() => togglePlayerStatus(player.id, 'isHot')}
                           className={`p-1 rounded-full transition-colors ${player.isHot ? 'text-red-500' : 'text-gray-600 hover:text-red-500'}`}
@@ -757,7 +746,7 @@ const InteractivePlayerTable = () => {
                         </button>
                       </td>
 
-                      <td className="px-3 py-3 leading-tight text-center">
+                      <td className={`${tdBase} text-center`}>
                         <button
                           onClick={() => togglePlayerStatus(player.id, 'isCold')}
                           className={`p-1 rounded-full transition-colors ${player.isCold ? 'text-blue-400' : 'text-gray-600 hover:text-blue-400'}`}
@@ -770,6 +759,7 @@ const InteractivePlayerTable = () => {
                 );
               })}
 
+              {/* Abschluss-Dropzone am Ende */}
               {filteredAndSortedPlayers.length > 0 && (
                 <DropZoneRow
                   ariaLabel="Ende der Liste"
