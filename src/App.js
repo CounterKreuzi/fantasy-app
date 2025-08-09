@@ -60,30 +60,31 @@ const RedoIcon = (props) => (
 );
 
 /* =========================
-   Drop-Zone (angedockt, große Hit-Area, visuell on-hover)
+   Drop-Zone (keine Luft, Indikatorhöhe = Zeilenhöhe, Hover-only sichtbar)
    ========================= */
 const DropZoneRow = ({
   onDrop,
   onDragOver,
   ariaLabel = 'Drop here',
   active = false,
-  hitHeightPx = 34,   // etwas größer als zuvor
-  visualHeightPx = 3, // noch schmäler
+  hitHeightPx = 6,   // Zeilenhöhe der Dropzone (sehr schmal)
+  visualHeightPx = 6 // Indikator = gesamte Zeile
 }) => {
   return (
     <tr onDrop={onDrop} onDragOver={onDragOver}>
       <td colSpan="10" className="p-0">
         <div
           style={{ height: `${hitHeightPx}px` }}
-          className="m-0 flex items-center group"  // group für hover-Visibility
+          className="m-0 flex items-center group"
           aria-label={ariaLabel}
         >
           <div
             style={{ height: `${visualHeightPx}px` }}
             className={[
               'w-full rounded-full transition-opacity duration-150',
-              // unsichtbar standard; sichtbar bei hover ODER wenn active (drag-over)
-              active ? 'opacity-100 bg-blue-400 outline outline-1 outline-blue-900/40' : 'opacity-0 group-hover:opacity-100 bg-blue-700/60 outline outline-1 outline-blue-900/40'
+              // unsichtbar standard; sichtbar bei Hover oder aktivem Drag
+              active ? 'opacity-100 bg-blue-400 outline outline-1 outline-blue-900/40'
+                    : 'opacity-0 group-hover:opacity-100 bg-blue-700/60 outline outline-1 outline-blue-900/40'
             ].join(' ')}
           />
         </div>
@@ -411,8 +412,8 @@ const InteractivePlayerTable = () => {
 
   const positionButtons = ['Overall', 'QB', 'RB', 'WR', 'TE', 'FLEX', 'K', 'DST'];
 
-  /* ======= Kompaktere Row-Klassen ======= */
-  const tdBase = "px-3 py-2 leading-tight"; // vorher p-3 → kompakter
+  /* ======= Spielerzeilen: wieder etwas großzügiger ======= */
+  const tdBase = "px-3 py-3 leading-tight"; // vorher py-2 → jetzt etwas mehr
 
   return (
     <div className="max-w-7xl mx-auto p-2 sm:p-4 bg-gray-900 text-gray-200 min-h-screen font-sans">
@@ -445,20 +446,16 @@ const InteractivePlayerTable = () => {
 
           <div className="p-2 border-b border-gray-700 flex flex-wrap items-center justify-between gap-y-3">
             <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
-              <button onClick={() => handleStatusFilterToggle('available')} title="Nur verfügbare Spieler" className={`p-2 rounded-md transition-colors ${statusFilters.available ? 'bg-green-600 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}>
-                <CheckSquareIcon className="w-5 h-5" />
-              </button>
-              <div className="flex flex-wrap items-center gap-1 sm:gap-2">
-                {positionButtons.map(pos => (
-                  <button
-                    key={pos}
-                    onClick={() => setActivePositionFilter(pos)}
-                    className={`px-2.5 py-1.5 text-sm font-semibold rounded-md transition-all duration-200 ${activePositionFilter === pos ? 'bg-blue-600 text-white shadow-md' : 'text-gray-300 hover:text-white hover:bg-gray-600'}`}
-                  >
-                    {pos}
-                  </button>
-                ))}
-              </div>
+              <button onClick={() => setActivePositionFilter('Overall')} className={`px-2.5 py-1.5 text-sm font-semibold rounded-md transition-all duration-200 ${activePositionFilter === 'Overall' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-300 hover:text-white hover:bg-gray-600'}`}>Overall</button>
+              {['QB','RB','WR','TE','FLEX','K','DST'].map(pos => (
+                <button
+                  key={pos}
+                  onClick={() => setActivePositionFilter(pos)}
+                  className={`px-2.5 py-1.5 text-sm font-semibold rounded-md transition-all duration-200 ${activePositionFilter === pos ? 'bg-blue-600 text-white shadow-md' : 'text-gray-300 hover:text-white hover:bg-gray-600'}`}
+                >
+                  {pos}
+                </button>
+              ))}
               <div className="flex items-center gap-2">
                 <label htmlFor="team-filter" className="text-sm font-medium text-gray-400">Team:</label>
                 <select
@@ -468,7 +465,7 @@ const InteractivePlayerTable = () => {
                   className="px-2.5 py-1.5 border border-gray-600 rounded-md bg-gray-700 text-white hover:bg-gray-600 transition focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">Alle</option>
-                  {uniqueTeams.map(team => (<option key={team} value={team}>{team}</option>))}
+                  {[...new Set(players.map(p=>p.team))].sort().map(team => (<option key={team} value={team}>{team}</option>))}
                 </select>
               </div>
               <div className="relative flex items-center">
@@ -489,9 +486,10 @@ const InteractivePlayerTable = () => {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <button onClick={() => handleStatusFilterToggle('favorite')} title="Favoriten" className={`p-2 rounded-md transition-colors ${statusFilters.favorite ? 'bg-yellow-500 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}><StarIcon className="w-5 h-5" /></button>
-              <button onClick={() => handleStatusFilterToggle('hot')} title="Hot" className={`p-2 rounded-md transition-colors ${statusFilters.hot ? 'bg-red-600 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}><FireIcon className="w-5 h-5" /></button>
-              <button onClick={() => handleStatusFilterToggle('cold')} title="Cold" className={`p-2 rounded-md transition-colors ${statusFilters.cold ? 'bg-blue-500 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}><SnowflakeIcon className="w-5 h-5" /></button>
+              <button onClick={() => setStatusFilters(s => ({...s, favorite: !s.favorite}))} title="Favoriten" className={`p-2 rounded-md transition-colors ${statusFilters.favorite ? 'bg-yellow-500 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}><StarIcon className="w-5 h-5" /></button>
+              <button onClick={() => setStatusFilters(s => ({...s, hot: !s.hot}))} title="Hot" className={`p-2 rounded-md transition-colors ${statusFilters.hot ? 'bg-red-600 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}><FireIcon className="w-5 h-5" /></button>
+              <button onClick={() => setStatusFilters(s => ({...s, cold: !s.cold}))} title="Cold" className={`p-2 rounded-md transition-colors ${statusFilters.cold ? 'bg-blue-500 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}><SnowflakeIcon className="w-5 h-5" /></button>
+              <button onClick={() => setStatusFilters(s => ({...s, available: !s.available}))} title="Nur verfügbare Spieler" className={`p-2 rounded-md transition-colors ${statusFilters.available ? 'bg-green-600 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}><CheckSquareIcon className="w-5 h-5" /></button>
             </div>
           </div>
         </div>
@@ -514,7 +512,7 @@ const InteractivePlayerTable = () => {
               </tr>
             </thead>
 
-            {/* Global Drop: nutzt hoverKey als Ziel */}
+            {/* Globaler Drop nutzt hoverKey */}
             <tbody
               onDragOver={(e) => e.preventDefault()}
               onDrop={handleGlobalDrop}
@@ -565,7 +563,7 @@ const InteractivePlayerTable = () => {
                       />
                     )}
 
-                    {/* ---- Zwischen Spielerzeilen: eine Zone pro Gap ---- */}
+                    {/* ---- Zwischen Spielerzeilen: eine Zone pro Gap (sehr schmal) ---- */}
                     {!isNewTier && (
                       <DropZoneRow
                         ariaLabel={`Gap vor Zeile ${index}`}
@@ -574,7 +572,7 @@ const InteractivePlayerTable = () => {
                       />
                     )}
 
-                    {/* ---- Spielerzeile (kompakter) ---- */}
+                    {/* ---- Spielerzeile (etwas mehr Padding) ---- */}
                     <tr
                       className={`border-b border-gray-700 hover:bg-gray-700/50 transition-colors duration-150 cursor-grab active:cursor-grabbing ${draggedItem?.id === player.id ? 'opacity-40' : ''} ${player.unavailable ? 'opacity-50 bg-gray-800/60' : ''}`}
                       draggable
