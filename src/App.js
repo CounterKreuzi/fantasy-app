@@ -492,7 +492,7 @@ const InteractivePlayerTable = () => {
   };
 
   const positionButtons = ['Overall', 'QB', 'RB', 'WR', 'TE', 'FLEX', 'K', 'DST'];
-  const tdBase = "px-3 py-3 leading-tight";
+  // const tdBase = "px-3 py-3 leading-tight"; 
 
   return (
     <div className="max-w-7xl mx-auto p-2 sm:p-4 bg-gray-900 text-gray-200 min-h-screen font-sans">
