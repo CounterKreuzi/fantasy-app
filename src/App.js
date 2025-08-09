@@ -60,31 +60,30 @@ const RedoIcon = (props) => (
 );
 
 /* =========================
-   Drop-Zone (angedockt, große Hit-Area, schmale Optik)
+   Drop-Zone (angedockt, große Hit-Area, visuell on-hover)
    ========================= */
 const DropZoneRow = ({
-  onDrop,        // bleibt vorhanden (für klassische Drops)
+  onDrop,
   onDragOver,
   ariaLabel = 'Drop here',
   active = false,
-  hitHeightPx = 28,   // großzügige Trefferfläche
-  visualHeightPx = 4, // schmaler Balken
-  className = '',
+  hitHeightPx = 34,   // etwas größer als zuvor
+  visualHeightPx = 3, // noch schmäler
 }) => {
   return (
-    <tr onDrop={onDrop} onDragOver={onDragOver} className={className}>
+    <tr onDrop={onDrop} onDragOver={onDragOver}>
       <td colSpan="10" className="p-0">
         <div
           style={{ height: `${hitHeightPx}px` }}
-          className="m-0 flex items-center"
+          className="m-0 flex items-center group"  // group für hover-Visibility
           aria-label={ariaLabel}
         >
           <div
             style={{ height: `${visualHeightPx}px` }}
             className={[
-              'w-full rounded-full transition-all duration-75',
-              active ? 'bg-blue-400' : 'bg-blue-700/60',
-              'outline outline-1 outline-blue-900/40'
+              'w-full rounded-full transition-opacity duration-150',
+              // unsichtbar standard; sichtbar bei hover ODER wenn active (drag-over)
+              active ? 'opacity-100 bg-blue-400 outline outline-1 outline-blue-900/40' : 'opacity-0 group-hover:opacity-100 bg-blue-700/60 outline outline-1 outline-blue-900/40'
             ].join(' ')}
           />
         </div>
@@ -111,7 +110,7 @@ const InteractivePlayerTable = () => {
 
   // Drag & Drop
   const [draggedItem, setDraggedItem] = useState(null);
-  const [hoverKey, setHoverKey] = useState(null); // letzte "aktive" Zone (entscheidet die Einfügeposition)
+  const [hoverKey, setHoverKey] = useState(null); // entscheidet Drop-Ziel
 
   // History
   const [history, setHistory] = useState([]);
@@ -162,14 +161,9 @@ const InteractivePlayerTable = () => {
     const positionCounts = {};
     return playerList.map(player => {
       const pos = player.basePos;
-      if (!positionCounts[pos]) {
-        positionCounts[pos] = 0;
-      }
+      if (!positionCounts[pos]) positionCounts[pos] = 0;
       positionCounts[pos]++;
-      return {
-        ...player,
-        pos: `${pos}${positionCounts[pos]}`
-      };
+      return { ...player, pos: `${pos}${positionCounts[pos]}` };
     });
   };
 
@@ -236,14 +230,8 @@ const InteractivePlayerTable = () => {
   const togglePlayerStatus = (playerId, statusKey) => {
     setPlayersWithHistory(prev => prev.map(p => p.id === playerId ? { ...p, [statusKey]: !p[statusKey] } : p));
   };
-
-  const handleStatusFilterToggle = (filterKey) => {
-    setStatusFilters(prev => ({ ...prev, [filterKey]: !prev[filterKey] }));
-  };
-
-  const toggleAvailability = (playerId) => {
-    setPlayersWithHistory(prev => prev.map(p => p.id === playerId ? { ...p, unavailable: !p.unavailable } : p));
-  };
+  const handleStatusFilterToggle = (filterKey) => setStatusFilters(prev => ({ ...prev, [filterKey]: !prev[filterKey] }));
+  const toggleAvailability = (playerId) => setPlayersWithHistory(prev => prev.map(p => p.id === playerId ? { ...p, unavailable: !p.unavailable } : p));
 
   const handleCellEdit = (playerId, field, value) => {
     setPlayersWithHistory(prev => {
@@ -252,17 +240,14 @@ const InteractivePlayerTable = () => {
 
       if (field === 'rank') {
         const targetRank = parseInt(value);
-        if (isNaN(targetRank) || targetRank < 1) {
-          setEditingCell(null);
-          return prev;
-        }
+        if (isNaN(targetRank) || targetRank < 1) { setEditingCell(null); return prev; }
         const player = prev[playerIndex];
         const newPlayers = [...prev];
         newPlayers.splice(playerIndex, 1);
         const insertIndex = Math.min(targetRank - 1, newPlayers.length);
         newPlayers.splice(insertIndex, 0, player);
-        const updatedRanks = newPlayers.map((p, index) => ({ ...p, rank: index + 1, order: index + 1 }));
-        return calculatePositionalRanks(updatedRanks);
+        const updated = newPlayers.map((p, i) => ({ ...p, rank: i + 1, order: i + 1 }));
+        return calculatePositionalRanks(updated);
       }
       return prev.map(p => p.id === playerId ? { ...p, [field]: value } : p);
     });
@@ -284,29 +269,24 @@ const InteractivePlayerTable = () => {
   }, [activePositionFilter]);
 
   const filteredAndSortedPlayers = useMemo(() => {
-    let playersToFilter = getFilteredByPosition(players);
-    if (statusFilters.available) playersToFilter = playersToFilter.filter(p => !p.unavailable);
-    if (statusFilters.favorite) playersToFilter = playersToFilter.filter(p => p.isFavorite);
-    if (statusFilters.hot) playersToFilter = playersToFilter.filter(p => p.isHot);
-    if (statusFilters.cold) playersToFilter = playersToFilter.filter(p => p.isCold);
+    let list = getFilteredByPosition(players);
+    if (statusFilters.available) list = list.filter(p => !p.unavailable);
+    if (statusFilters.favorite) list = list.filter(p => p.isFavorite);
+    if (statusFilters.hot) list = list.filter(p => p.isHot);
+    if (statusFilters.cold) list = list.filter(p => p.isCold);
 
-    playersToFilter = playersToFilter.filter(player => {
+    list = list.filter(player => {
       if (teamFilter && player.team !== teamFilter) return false;
       if (searchQuery && !player.name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
       return true;
     });
 
-    return playersToFilter.sort((a,b) => (a.order ?? a.rank) - (b.order ?? b.rank));
+    return list.sort((a,b) => (a.order ?? a.rank) - (b.order ?? b.rank));
   }, [players, getFilteredByPosition, teamFilter, searchQuery, statusFilters]);
 
   /* ========== Drag & Drop Helpers ========== */
-  const handleDragStart = (_e, player) => {
-    setDraggedItem(player);
-  };
-  const handleDragEnd = () => {
-    setDraggedItem(null);
-    setHoverKey(null);
-  };
+  const handleDragStart = (_e, player) => { setDraggedItem(player); };
+  const handleDragEnd = () => { setDraggedItem(null); setHoverKey(null); };
 
   const getOrder = (p) => p ? (p.order ?? p.rank) : null;
   const between = (a, b) => {
@@ -350,7 +330,7 @@ const InteractivePlayerTable = () => {
       const left = visible[visIndex - 1] ?? null; // letzter im oberen Block
       const right = visible[visIndex] ?? null;     // erster im unteren Block
 
-      let newOrder = between(left, right);
+      const newOrder = between(left, right);
       let newTier;
       if (where === 'above') {
         newTier = left ? left.tier : Math.max(1, (right?.tier ?? moved.tier) - 1);
@@ -393,9 +373,8 @@ const InteractivePlayerTable = () => {
       else newOrder = between(left, right);
 
       let newTier;
-      if (left && right) {
-        newTier = (left.tier === right.tier) ? left.tier : right.tier; // Gap gehört logisch zum rechten Tier
-      } else if (left) newTier = left.tier;
+      if (left && right) newTier = (left.tier === right.tier) ? left.tier : right.tier; // Gap gehört logisch zum rechten Tier
+      else if (left) newTier = left.tier;
       else if (right) newTier = right.tier;
       else newTier = moved.tier;
 
@@ -411,68 +390,45 @@ const InteractivePlayerTable = () => {
     handleDragEnd();
   };
 
-  /* ======= GLOBALER DROP-HANDLER =======
-     Nutzt die zuletzt aktive Zone (hoverKey) als Ziel,
-     egal wo im tbody gedroppt wird. */
+  /* ======= GLOBALER DROP-HANDLER ======= */
   const handleGlobalDrop = (e) => {
     e.preventDefault();
-    if (!draggedItem || !hoverKey) {
-      handleDragEnd();
-      return;
-    }
+    if (!draggedItem || !hoverKey) { handleDragEnd(); return; }
 
-    // Muster:
-    // 'tier-<tier>-above-<index>'
-    // 'tier-<tier>-below-<index>'
-    // 'gap-before-<index>'
-    // 'end'
     if (hoverKey === 'end') {
       handleDropBetweenRows(e, filteredAndSortedPlayers.length);
       return;
     }
-
     const tierAboveMatch = hoverKey.match(/^tier-(\d+)-above-(\d+)$/);
-    if (tierAboveMatch) {
-      const idx = parseInt(tierAboveMatch[2], 10);
-      handleDropAtBoundary(e, idx, 'above');
-      return;
-    }
-
+    if (tierAboveMatch) { handleDropAtBoundary(e, parseInt(tierAboveMatch[2], 10), 'above'); return; }
     const tierBelowMatch = hoverKey.match(/^tier-(\d+)-below-(\d+)$/);
-    if (tierBelowMatch) {
-      const idx = parseInt(tierBelowMatch[2], 10);
-      handleDropAtBoundary(e, idx, 'below');
-      return;
-    }
-
+    if (tierBelowMatch) { handleDropAtBoundary(e, parseInt(tierBelowMatch[2], 10), 'below'); return; }
     const gapMatch = hoverKey.match(/^gap-before-(\d+)$/);
-    if (gapMatch) {
-      const idx = parseInt(gapMatch[1], 10);
-      handleDropBetweenRows(e, idx);
-      return;
-    }
+    if (gapMatch) { handleDropBetweenRows(e, parseInt(gapMatch[1], 10)); return; }
 
-    // Fallback: nichts erkannt → nur aufräumen
     handleDragEnd();
   };
 
   const positionButtons = ['Overall', 'QB', 'RB', 'WR', 'TE', 'FLEX', 'K', 'DST'];
+
+  /* ======= Kompaktere Row-Klassen ======= */
+  const tdBase = "px-3 py-2 leading-tight"; // vorher p-3 → kompakter
 
   return (
     <div className="max-w-7xl mx-auto p-2 sm:p-4 bg-gray-900 text-gray-200 min-h-screen font-sans">
       <div className="bg-gray-800 rounded-lg shadow-2xl flex flex-col h-[calc(100vh-2rem)]">
         {/* Kopfbereich */}
         <div className="flex-shrink-0">
-          <div className="p-4 bg-gray-700/50 border-b border-gray-700 flex flex-wrap items-center justify-between gap-4">
-            <div className="flex flex-wrap items-center gap-4">
-              <label htmlFor="csv-upload" className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 transition">
+          <div className="p-3 bg-gray-700/50 border-b border-gray-700 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <label htmlFor="csv-upload" className="cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 transition">
                 <UploadCloudIcon className="w-5 h-5" /> CSV importieren
               </label>
               <input id="csv-upload" type="file" accept=".csv" onChange={handleFileUpload} className="hidden" />
               <button
                 onClick={exportToCSV}
                 disabled={players.length === 0}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white font-semibold rounded-md hover:bg-green-700 transition disabled:bg-gray-600 disabled:cursor-not-allowed"
+                className="inline-flex items-center gap-2 px-3 py-1.5 bg-green-600 text-white font-semibold rounded-md hover:bg-green-700 transition disabled:bg-gray-600 disabled:cursor-not-allowed"
               >
                 <DownloadIcon className="w-5 h-5" /> CSV exportieren
               </button>
@@ -487,8 +443,8 @@ const InteractivePlayerTable = () => {
             </div>
           </div>
 
-          <div className="p-3 border-b border-gray-700 flex flex-wrap items-center justify-between gap-y-4">
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-4">
+          <div className="p-2 border-b border-gray-700 flex flex-wrap items-center justify-between gap-y-3">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
               <button onClick={() => handleStatusFilterToggle('available')} title="Nur verfügbare Spieler" className={`p-2 rounded-md transition-colors ${statusFilters.available ? 'bg-green-600 text-white' : 'bg-gray-700 hover:bg-gray-600'}`}>
                 <CheckSquareIcon className="w-5 h-5" />
               </button>
@@ -497,7 +453,7 @@ const InteractivePlayerTable = () => {
                   <button
                     key={pos}
                     onClick={() => setActivePositionFilter(pos)}
-                    className={`px-3 py-1.5 text-sm sm:text-base font-semibold rounded-md transition-all duration-200 ${activePositionFilter === pos ? 'bg-blue-600 text-white shadow-md' : 'text-gray-300 hover:text-white hover:bg-gray-600'}`}
+                    className={`px-2.5 py-1.5 text-sm font-semibold rounded-md transition-all duration-200 ${activePositionFilter === pos ? 'bg-blue-600 text-white shadow-md' : 'text-gray-300 hover:text-white hover:bg-gray-600'}`}
                   >
                     {pos}
                   </button>
@@ -509,7 +465,7 @@ const InteractivePlayerTable = () => {
                   id="team-filter"
                   value={teamFilter}
                   onChange={(e) => setTeamFilter(e.target.value)}
-                  className="px-3 py-1.5 border border-gray-600 rounded-md bg-gray-700 text-white hover:bg-gray-600 transition focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="px-2.5 py-1.5 border border-gray-600 rounded-md bg-gray-700 text-white hover:bg-gray-600 transition focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">Alle</option>
                   {uniqueTeams.map(team => (<option key={team} value={team}>{team}</option>))}
@@ -545,20 +501,20 @@ const InteractivePlayerTable = () => {
           <table className="w-full min-w-[900px] border-separate border-spacing-0">
             <thead className="bg-gray-800">
               <tr className="sticky top-0 bg-gray-800 z-10 border-b-2 border-gray-600">
-                <th className="p-3 text-center w-12 font-semibold">✓</th>
-                <th className="p-3 text-left font-semibold">RK</th>
-                <th className="p-3 text-left font-semibold">PLAYER NAME</th>
-                <th className="p-3 text-left font-semibold">TEAM</th>
-                <th className="p-3 text-left font-semibold">POS</th>
-                <th className="p-3 text-center font-semibold">BYE</th>
-                <th className="p-3 text-left min-w-[200px] font-semibold">NOTIZEN</th>
-                <th className="p-3 text-center w-12 font-semibold"><StarIcon className="w-4 h-4 mx-auto" /></th>
-                <th className="p-3 text-center w-12 font-semibold"><FireIcon className="w-4 h-4 mx-auto" /></th>
-                <th className="p-3 text-center w-12 font-semibold"><SnowflakeIcon className="w-4 h-4 mx-auto" /></th>
+                <th className={`${tdBase} text-center w-12 font-semibold`}>✓</th>
+                <th className={`${tdBase} text-left font-semibold`}>RK</th>
+                <th className={`${tdBase} text-left font-semibold`}>PLAYER NAME</th>
+                <th className={`${tdBase} text-left font-semibold`}>TEAM</th>
+                <th className={`${tdBase} text-left font-semibold`}>POS</th>
+                <th className={`${tdBase} text-center font-semibold`}>BYE</th>
+                <th className={`${tdBase} text-left min-w-[200px] font-semibold`}>NOTIZEN</th>
+                <th className={`${tdBase} text-center w-12 font-semibold`}><StarIcon className="w-4 h-4 mx-auto" /></th>
+                <th className={`${tdBase} text-center w-12 font-semibold`}><FireIcon className="w-4 h-4 mx-auto" /></th>
+                <th className={`${tdBase} text-center w-12 font-semibold`}><SnowflakeIcon className="w-4 h-4 mx-auto" /></th>
               </tr>
             </thead>
 
-            {/* Wichtig: global onDrop nutzt hoverKey → Zielzone */}
+            {/* Global Drop: nutzt hoverKey als Ziel */}
             <tbody
               onDragOver={(e) => e.preventDefault()}
               onDrop={handleGlobalDrop}
@@ -588,14 +544,13 @@ const InteractivePlayerTable = () => {
                         ariaLabel={`Tier ${player.tier} oben`}
                         active={hoverKey === tierAboveKey}
                         onDragOver={(e) => { e.preventDefault(); setHoverKey(tierAboveKey); }}
-                        // onDrop optional — globaler Drop fängt ohnehin ab
                       />
                     )}
 
                     {/* ---- Tier-Header ---- */}
                     {isNewTier && (
                       <tr className="bg-blue-800/50 text-white">
-                        <td colSpan="10" className="px-4 py-1 text-sm font-bold tracking-wider">
+                        <td colSpan="10" className="px-4 py-1 text-sm font-bold tracking-wider leading-tight">
                           Tier {player.tier}
                         </td>
                       </tr>
@@ -619,14 +574,14 @@ const InteractivePlayerTable = () => {
                       />
                     )}
 
-                    {/* ---- Spielerzeile ---- */}
+                    {/* ---- Spielerzeile (kompakter) ---- */}
                     <tr
                       className={`border-b border-gray-700 hover:bg-gray-700/50 transition-colors duration-150 cursor-grab active:cursor-grabbing ${draggedItem?.id === player.id ? 'opacity-40' : ''} ${player.unavailable ? 'opacity-50 bg-gray-800/60' : ''}`}
                       draggable
                       onDragStart={(e) => handleDragStart(e, player)}
                       onDragEnd={handleDragEnd}
                     >
-                      <td className="p-3 text-center">
+                      <td className={`${tdBase} text-center`}>
                         <input
                           type="checkbox"
                           checked={player.unavailable}
@@ -635,19 +590,19 @@ const InteractivePlayerTable = () => {
                         />
                       </td>
 
-                      <td className={`p-3 text-center ${player.unavailable ? 'line-through text-gray-500' : ''}`}>
+                      <td className={`${tdBase} text-center ${player.unavailable ? 'line-through text-gray-500' : ''}`}>
                         {editingCell === `${player.id}-rank` ? (
                           <input
                             type="number"
                             defaultValue={player.rank}
                             onBlur={(e) => handleCellEdit(player.id, 'rank', e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
-                            className="px-2 py-1 border border-gray-600 rounded bg-gray-900 w-16 text-center"
+                            className="px-2 py-1 border border-gray-600 rounded bg-gray-900 w-16 text-center leading-tight"
                             autoFocus
                           />
                         ) : (
                           <span
-                            className="cursor-pointer hover:bg-gray-600/50 px-2 py-1 rounded inline-flex items-center gap-1 group"
+                            className="cursor-pointer hover:bg-gray-600/50 px-2 py-1 rounded inline-flex items-center gap-1 group leading-tight"
                             onClick={() => setEditingCell(`${player.id}-rank`)}
                           >
                             {player.rank}
@@ -656,34 +611,34 @@ const InteractivePlayerTable = () => {
                         )}
                       </td>
 
-                      <td className={`p-3 group ${player.unavailable ? 'line-through text-gray-500' : ''}`}>
+                      <td className={`${tdBase} group ${player.unavailable ? 'line-through text-gray-500' : ''}`}>
                         <span className="font-medium text-gray-100">{player.name}</span>
                       </td>
 
-                      <td className={`p-3 ${player.unavailable ? 'line-through text-gray-500' : ''}`}>
+                      <td className={`${tdBase} ${player.unavailable ? 'line-through text-gray-500' : ''}`}>
                         <span className="font-semibold text-gray-400">{player.team}</span>
                       </td>
 
-                      <td className={`p-3 ${player.unavailable ? 'line-through text-gray-500' : 'text-gray-300'}`}>{player.pos}</td>
+                      <td className={`${tdBase} ${player.unavailable ? 'line-through text-gray-500' : 'text-gray-300'}`}>{player.pos}</td>
 
-                      <td className={`p-3 text-center ${player.unavailable ? 'line-through text-gray-500' : ''}`}>
+                      <td className={`${tdBase} text-center ${player.unavailable ? 'line-through text-gray-500' : ''}`}>
                         <span className="font-medium">{player.byeWeek}</span>
                       </td>
 
-                      <td className="p-3">
+                      <td className={`${tdBase}`}>
                         {editingCell === `${player.id}-notes` ? (
                           <input
                             type="text"
                             defaultValue={player.notes}
                             onBlur={(e) => handleCellEdit(player.id, 'notes', e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
-                            className="px-2 py-1 border border-gray-600 rounded bg-gray-900 w-full"
+                            className="px-2 py-1 border border-gray-600 rounded bg-gray-900 w-full leading-tight"
                             placeholder="Notiz hinzufügen..."
                             autoFocus
                           />
                         ) : (
                           <span
-                            className={`cursor-pointer hover:bg-gray-600/50 px-2 py-1 rounded block min-h-[28px] w-full ${player.notes ? 'text-gray-300' : 'text-gray-500'}`}
+                            className={`cursor-pointer hover:bg-gray-600/50 px-2 py-1 rounded block min-h-[24px] w-full ${player.notes ? 'text-gray-300' : 'text-gray-500'} leading-tight`}
                             onClick={() => setEditingCell(`${player.id}-notes`)}
                           >
                             {player.notes || '+ Notiz'}
@@ -691,7 +646,7 @@ const InteractivePlayerTable = () => {
                         )}
                       </td>
 
-                      <td className="p-3 text-center">
+                      <td className={`${tdBase} text-center`}>
                         <button
                           onClick={() => togglePlayerStatus(player.id, 'isFavorite')}
                           className={`p-1 rounded-full transition-colors ${player.isFavorite ? 'text-yellow-400' : 'text-gray-600 hover:text-yellow-400'}`}
@@ -700,7 +655,7 @@ const InteractivePlayerTable = () => {
                         </button>
                       </td>
 
-                      <td className="p-3 text-center">
+                      <td className={`${tdBase} text-center`}>
                         <button
                           onClick={() => togglePlayerStatus(player.id, 'isHot')}
                           className={`p-1 rounded-full transition-colors ${player.isHot ? 'text-red-500' : 'text-gray-600 hover:text-red-500'}`}
@@ -709,7 +664,7 @@ const InteractivePlayerTable = () => {
                         </button>
                       </td>
 
-                      <td className="p-3 text-center">
+                      <td className={`${tdBase} text-center`}>
                         <button
                           onClick={() => togglePlayerStatus(player.id, 'isCold')}
                           className={`p-1 rounded-full transition-colors ${player.isCold ? 'text-blue-400' : 'text-gray-600 hover:text-blue-400'}`}
