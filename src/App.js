@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useRef } from 'react';
 
 /* =========================
    SVG-Icons
@@ -60,21 +60,25 @@ const RedoIcon = (props) => (
 );
 
 /* =========================
-   Drop-Zone
+   Drop-Zone (nur sichtbar während Drag, Indikatorhöhe = Zeilenhöhe)
    ========================= */
 const DropZoneRow = ({
   onDrop,
   onDragOver,
   ariaLabel = 'Drop here',
   active = false,
-  isDragging = false,
+  isDragging = false,  // <— nur dann zeigen wir etwas
   hitHeightPx = 6,
   visualHeightPx = 6,
 }) => {
   return (
     <tr onDrop={onDrop} onDragOver={onDragOver}>
       <td colSpan="10" className="p-0">
-        <div style={{ height: `${hitHeightPx}px` }} className="m-0 flex items-center" aria-label={ariaLabel}>
+        <div
+          style={{ height: `${hitHeightPx}px` }}
+          className="m-0 flex items-center"
+          aria-label={ariaLabel}
+        >
           <div
             style={{ height: `${visualHeightPx}px` }}
             className={[
@@ -145,11 +149,11 @@ const InteractivePlayerTable = () => {
 
   const setPlayersWithHistory = useCallback((updateFunction) => {
     setPlayers(prev => {
-      const next = typeof updateFunction === 'function' ? updateFunction(prev) : updateFunction;
-      if (!isPerformingHistoryAction.current && JSON.stringify(prev) !== JSON.stringify(next)) {
-        addToHistory(next);
+      const newPlayers = typeof updateFunction === 'function' ? updateFunction(prev) : updateFunction;
+      if (!isPerformingHistoryAction.current && JSON.stringify(prev) !== JSON.stringify(newPlayers)) {
+        addToHistory(newPlayers);
       }
-      return next;
+      return newPlayers;
     });
   }, [addToHistory]);
 
@@ -288,19 +292,14 @@ const InteractivePlayerTable = () => {
   }, [players, getFilteredByPosition, teamFilter, searchQuery, statusFilters]);
 
   /* ========== Drag & Drop Helpers ========== */
-  const handleDragStart = (e, player) => {
-    // einige Browser (Firefox) benötigen ein DataTransfer-Item
-    try { e.dataTransfer.setData('text/plain', String(player.id)); } catch {}
-    setDraggedItem(player);
-  };
-  const handleDragEnd = () => { setDraggedItem(null); setHoverKey(null); stopAutoScroll(); };
+  const handleDragStart = (_e, player) => { setDraggedItem(player); };
+  const handleDragEnd = () => { setDraggedItem(null); setHoverKey(null); };
 
   const getOrder = (p) => p ? (p.order ?? p.rank) : null;
   const between = (a, b) => {
     const ao = getOrder(a) ?? ((getOrder(b) ?? 1) - 1);
     const bo = getOrder(b) ?? (ao + 2);
     return (ao + bo) / 2;
-    // Reihen werden später normalisiert (Rank/Order als Ganzzahlen)
   };
 
   const buildVisibleFrom = (prevPlayers) => {
@@ -323,6 +322,7 @@ const InteractivePlayerTable = () => {
     return list.sort((a,b) => (a.order ?? a.rank) - (b.order ?? b.rank));
   };
 
+  /* ----- Drop: Tier-Grenze (über Tier 1 KEINE) ----- */
   const handleDropAtBoundary = (e, visIndex, where /* 'above' | 'below' */) => {
     e.preventDefault();
     if (!draggedItem) return;
@@ -357,6 +357,7 @@ const InteractivePlayerTable = () => {
     handleDragEnd();
   };
 
+  /* ----- Drop: Zwischen zwei Spielerreihen (eine Zone pro Gap) ----- */
   const handleDropBetweenRows = (e, visIndex /* drop VOR diesem Index */) => {
     e.preventDefault();
     if (!draggedItem) return;
@@ -396,6 +397,7 @@ const InteractivePlayerTable = () => {
     handleDragEnd();
   };
 
+  /* ======= GLOBALER DROP-HANDLER (nutzt hoverKey) ======= */
   const handleGlobalDrop = (e) => {
     e.preventDefault();
     if (!draggedItem || !hoverKey) { handleDragEnd(); return; }
@@ -414,88 +416,8 @@ const InteractivePlayerTable = () => {
     handleDragEnd();
   };
 
-  /* ========== Verbesserte Auto-Scroll-Logik ==========
-     - Kontinuierliche RAF-Schleife mit dyRef
-     - Quadratische Intensität für sanfteres Einsetzen
-  ===================================================== */
-  const scrollContainerRef = useRef(null);
-  const loopRef = useRef(null);
-  const dyRef = useRef(0);
-
-  const EDGE_PX = 140;               // Größe der Zonen oben/unten
-  const MAX_SPEED_PX_PER_FRAME = 28; // Max. Geschwindigkeit pro Frame
-
-  const startAutoScroll = useCallback(() => {
-    if (loopRef.current) return;
-    const tick = () => {
-      const el = scrollContainerRef.current;
-      if (!el) { loopRef.current = null; return; }
-
-      const dy = dyRef.current;
-      if (dy !== 0) {
-        const prev = el.scrollTop;
-        const next = prev + dy;
-
-        // an Grenzen nicht weiter „ruckeln“
-        const min = 0;
-        const max = el.scrollHeight - el.clientHeight;
-        const clamped = Math.max(min, Math.min(max, next));
-        el.scrollTop = clamped;
-
-        if ((clamped === min && dy < 0) || (clamped === max && dy > 0)) {
-          dyRef.current = 0; // Ende erreicht
-        }
-      }
-
-      if (dyRef.current === 0) {
-        // Kein Bedarf mehr -> Schleife beenden
-        cancelAnimationFrame(loopRef.current);
-        loopRef.current = null;
-        return;
-      }
-      loopRef.current = requestAnimationFrame(tick);
-    };
-    loopRef.current = requestAnimationFrame(tick);
-  }, []);
-
-  const stopAutoScroll = useCallback(() => {
-    dyRef.current = 0;
-    if (loopRef.current) {
-      cancelAnimationFrame(loopRef.current);
-      loopRef.current = null;
-    }
-  }, []);
-
-  const maybeAutoScroll = useCallback((clientY) => {
-    const el = scrollContainerRef.current;
-    if (!el) return;
-
-    const rect = el.getBoundingClientRect();
-    const distTop = clientY - rect.top;
-    const distBot = rect.bottom - clientY;
-
-    let dy = 0;
-
-    if (distTop < EDGE_PX && distTop >= 0) {
-      const t = 1 - distTop / EDGE_PX;        // 0..1
-      const intensity = t * t;                // sanfter
-      dy = -Math.ceil(intensity * MAX_SPEED_PX_PER_FRAME);
-    } else if (distBot < EDGE_PX && distBot >= 0) {
-      const t = 1 - distBot / EDGE_PX;
-      const intensity = t * t;
-      dy = Math.ceil(intensity * MAX_SPEED_PX_PER_FRAME);
-    }
-
-    dyRef.current = dy;
-    if (dy !== 0) startAutoScroll(); else stopAutoScroll();
-  }, [EDGE_PX, MAX_SPEED_PX_PER_FRAME, startAutoScroll, stopAutoScroll]);
-
-  useEffect(() => stopAutoScroll, [stopAutoScroll]);
-
   const positionButtons = ['Overall', 'QB', 'RB', 'WR', 'TE', 'FLEX', 'K', 'DST'];
   const tdBase = "px-3 py-3 leading-tight";
-
-  const isDragging = !!draggedItem;
 
   return (
     <div className="max-w-7xl mx-auto p-2 sm:p-4 bg-gray-900 text-gray-200 min-h-screen font-sans">
@@ -561,8 +483,8 @@ const InteractivePlayerTable = () => {
                 </select>
               </div>
 
-              <div className="relative">
-                <SearchIcon className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <div className="relative flex items中心">
+                <SearchIcon className="w-4 h-4 text-gray-400 absolute left-3 pointer-events-none" />
                 <input
                   id="search-filter"
                   type="text"
@@ -572,7 +494,7 @@ const InteractivePlayerTable = () => {
                   className="w-40 bg-gray-700 border border-gray-600 rounded-md py-1.5 pl-9 pr-8 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 {searchQuery && (
-                  <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white" aria-label="Suche zurücksetzen">
+                  <button onClick={() => setSearchQuery('')} className="absolute right-2 text-gray-400 hover:text-white" aria-label="Suche zurücksetzen">
                     <X className="w-4 h-4" />
                   </button>
                 )}
@@ -588,19 +510,8 @@ const InteractivePlayerTable = () => {
         </div>
 
         {/* Tabelle */}
-        <div
-          ref={scrollContainerRef}
-          className="flex-grow overflow-y-auto relative will-change-scroll"
-          onDragOver={(e) => {
-            if (draggedItem) {
-              e.preventDefault();
-              maybeAutoScroll(e.clientY);
-            }
-          }}
-          onDragLeave={() => stopAutoScroll()}
-          onDrop={() => stopAutoScroll()}
-        >
-          <table className="w-full min-w-[900px] border-separate border-spacing-0 select-none">
+        <div className="flex-grow overflow-y-auto relative">
+          <table className="w-full min-w-[900px] border-separate border-spacing-0">
             <thead className="bg-gray-800">
               <tr className="sticky top-0 bg-gray-800 z-10 border-b-2 border-gray-600">
                 <th className={`${tdBase} text-center w-12 font-semibold`}>✓</th>
@@ -616,10 +527,10 @@ const InteractivePlayerTable = () => {
               </tr>
             </thead>
 
+            {/* Globaler Drop nutzt hoverKey */}
             <tbody
               onDragOver={(e) => e.preventDefault()}
               onDrop={handleGlobalDrop}
-              className={isDragging ? 'pointer-events-none' : 'pointer-events-auto'}
             >
               {/* Falls keine Spieler */}
               {filteredAndSortedPlayers.length === 0 && (
@@ -640,7 +551,7 @@ const InteractivePlayerTable = () => {
 
                 return (
                   <React.Fragment key={player.id}>
-                    {/* Dropzone über Tier (ab Tier 2) */}
+                    {/* ---- Tier-Header: KEINE Dropzone über Tier 1 ---- */}
                     {isNewTier && player.tier !== 1 && (
                       <DropZoneRow
                         ariaLabel={`Tier ${player.tier} oben`}
@@ -650,7 +561,7 @@ const InteractivePlayerTable = () => {
                       />
                     )}
 
-                    {/* Tier-Header */}
+                    {/* ---- Tier-Header ---- */}
                     {isNewTier && (
                       <tr className="bg-blue-800/50 text-white">
                         <td colSpan="10" className="px-4 py-1 text-sm font-bold tracking-wider leading-tight">
@@ -659,7 +570,7 @@ const InteractivePlayerTable = () => {
                       </tr>
                     )}
 
-                    {/* Dropzone unterhalb Tier-Header */}
+                    {/* ---- Tier-Header: Dropzone UNTER der Tier-Zeile (auch bei Tier 1) ---- */}
                     {isNewTier && (
                       <DropZoneRow
                         ariaLabel={`Tier ${player.tier} unten`}
@@ -669,7 +580,7 @@ const InteractivePlayerTable = () => {
                       />
                     )}
 
-                    {/* Zwischen zwei Spielerzeilen */}
+                    {/* ---- Zwischen Spielerzeilen: eine Zone pro Gap ---- */}
                     {!isNewTier && (
                       <DropZoneRow
                         ariaLabel={`Gap vor Zeile ${index}`}
@@ -679,16 +590,9 @@ const InteractivePlayerTable = () => {
                       />
                     )}
 
-                    {/* Spielerzeile */}
+                    {/* ---- Spielerzeile ---- */}
                     <tr
-                      className={[
-                        'border-b border-gray-700 transition-colors duration-150',
-                        'cursor-grab active:cursor-grabbing',
-                        // Kein Hover-Highlight während Drag -> verhindert "grau markiert"
-                        !isDragging ? 'hover:bg-gray-700/50' : '',
-                        draggedItem?.id === player.id ? 'opacity-40' : '',
-                        player.unavailable ? 'opacity-60 bg-gray-800/60' : ''
-                      ].join(' ')}
+                      className={`border-b border-gray-700 hover:bg-gray-700/50 transition-colors duration-150 cursor-grab active:cursor-grabbing ${draggedItem?.id === player.id ? 'opacity-40' : ''} ${player.unavailable ? 'opacity-50 bg-gray-800/60' : ''}`}
                       draggable
                       onDragStart={(e) => handleDragStart(e, player)}
                       onDragEnd={handleDragEnd}
