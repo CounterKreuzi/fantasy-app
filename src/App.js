@@ -62,22 +62,21 @@ const RedoIcon = (props) => (
 /* =========================
    Drop-Zone (angedockt, große Hit-Area, schmale Optik)
    ========================= */
-// Ziel: kein vertikaler Abstand, funktional groß (ca. halbe Spielerzeilenhöhe),
-// optisch schlank. Für Debug weiterhin sichtbar.
 const DropZoneRow = ({
-  onDrop,
+  onDrop,        // bleibt vorhanden (für klassische Drops)
   onDragOver,
   ariaLabel = 'Drop here',
   active = false,
-  hitHeightPx = 28,   // ~halbe Spielerzeile (bei ~56px Zeilenhöhe)
-  visualHeightPx = 4, // schmale Optik
+  hitHeightPx = 28,   // großzügige Trefferfläche
+  visualHeightPx = 4, // schmaler Balken
+  className = '',
 }) => {
   return (
-    <tr onDrop={onDrop} onDragOver={onDragOver}>
+    <tr onDrop={onDrop} onDragOver={onDragOver} className={className}>
       <td colSpan="10" className="p-0">
         <div
           style={{ height: `${hitHeightPx}px` }}
-          className="m-0 flex items-center"  // angedockt: keine Abstände
+          className="m-0 flex items-center"
           aria-label={ariaLabel}
         >
           <div
@@ -112,7 +111,7 @@ const InteractivePlayerTable = () => {
 
   // Drag & Drop
   const [draggedItem, setDraggedItem] = useState(null);
-  const [hoverKey, setHoverKey] = useState(null);
+  const [hoverKey, setHoverKey] = useState(null); // letzte "aktive" Zone (entscheidet die Einfügeposition)
 
   // History
   const [history, setHistory] = useState([]);
@@ -412,6 +411,51 @@ const InteractivePlayerTable = () => {
     handleDragEnd();
   };
 
+  /* ======= GLOBALER DROP-HANDLER =======
+     Nutzt die zuletzt aktive Zone (hoverKey) als Ziel,
+     egal wo im tbody gedroppt wird. */
+  const handleGlobalDrop = (e) => {
+    e.preventDefault();
+    if (!draggedItem || !hoverKey) {
+      handleDragEnd();
+      return;
+    }
+
+    // Muster:
+    // 'tier-<tier>-above-<index>'
+    // 'tier-<tier>-below-<index>'
+    // 'gap-before-<index>'
+    // 'end'
+    if (hoverKey === 'end') {
+      handleDropBetweenRows(e, filteredAndSortedPlayers.length);
+      return;
+    }
+
+    const tierAboveMatch = hoverKey.match(/^tier-(\d+)-above-(\d+)$/);
+    if (tierAboveMatch) {
+      const idx = parseInt(tierAboveMatch[2], 10);
+      handleDropAtBoundary(e, idx, 'above');
+      return;
+    }
+
+    const tierBelowMatch = hoverKey.match(/^tier-(\d+)-below-(\d+)$/);
+    if (tierBelowMatch) {
+      const idx = parseInt(tierBelowMatch[2], 10);
+      handleDropAtBoundary(e, idx, 'below');
+      return;
+    }
+
+    const gapMatch = hoverKey.match(/^gap-before-(\d+)$/);
+    if (gapMatch) {
+      const idx = parseInt(gapMatch[1], 10);
+      handleDropBetweenRows(e, idx);
+      return;
+    }
+
+    // Fallback: nichts erkannt → nur aufräumen
+    handleDragEnd();
+  };
+
   const positionButtons = ['Overall', 'QB', 'RB', 'WR', 'TE', 'FLEX', 'K', 'DST'];
 
   return (
@@ -514,7 +558,11 @@ const InteractivePlayerTable = () => {
               </tr>
             </thead>
 
-            <tbody onDragOver={(e) => e.preventDefault()}>
+            {/* Wichtig: global onDrop nutzt hoverKey → Zielzone */}
+            <tbody
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={handleGlobalDrop}
+            >
               {/* Falls keine Spieler */}
               {filteredAndSortedPlayers.length === 0 && (
                 <tr>
@@ -540,7 +588,7 @@ const InteractivePlayerTable = () => {
                         ariaLabel={`Tier ${player.tier} oben`}
                         active={hoverKey === tierAboveKey}
                         onDragOver={(e) => { e.preventDefault(); setHoverKey(tierAboveKey); }}
-                        onDrop={(e) => handleDropAtBoundary(e, index, 'above')}
+                        // onDrop optional — globaler Drop fängt ohnehin ab
                       />
                     )}
 
@@ -559,7 +607,6 @@ const InteractivePlayerTable = () => {
                         ariaLabel={`Tier ${player.tier} unten`}
                         active={hoverKey === tierBelowKey}
                         onDragOver={(e) => { e.preventDefault(); setHoverKey(tierBelowKey); }}
-                        onDrop={(e) => handleDropAtBoundary(e, index, 'below')}
                       />
                     )}
 
@@ -569,7 +616,6 @@ const InteractivePlayerTable = () => {
                         ariaLabel={`Gap vor Zeile ${index}`}
                         active={hoverKey === gapKey}
                         onDragOver={(e) => { e.preventDefault(); setHoverKey(gapKey); }}
-                        onDrop={(e) => handleDropBetweenRows(e, index)}
                       />
                     )}
 
@@ -682,7 +728,6 @@ const InteractivePlayerTable = () => {
                   ariaLabel="Ende der Liste"
                   active={hoverKey === 'end'}
                   onDragOver={(e) => { e.preventDefault(); setHoverKey('end'); }}
-                  onDrop={(e) => handleDropBetweenRows(e, filteredAndSortedPlayers.length)}
                 />
               )}
             </tbody>
